@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Blind Chess</title>
+<meta name="description" content="Chess where you can't see what your opponent's pieces are. Two players, one screen." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%230b5fa5'/><text x='50' y='72' font-size='64' text-anchor='middle' fill='white'>♘</text></svg>" />
+<link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+<main>
+  <header>
+    <h1>Blind Chess</h1>
+    <p id="status"></p>
+  </header>
+  <div class="captured" id="cap-top"></div>
+  <div class="stage"><div id="board" class="board"></div></div>
+  <div class="captured" id="cap-bottom"></div>
+  <div class="controls">
+    <button id="mirror">🪞 Mirror (reveal all)</button>
+    <button id="undo">Undo</button>
+    <button id="new">New game</button>
+  </div>
+  <p class="hint">Your pieces face you. Theirs are blank cards. Captured pieces get revealed.</p>
+</main>
+<div id="pass" class="pass hidden"><div><h2 id="pass-title"></h2><p>Hand the screen over, then tap.</p><button id="pass-btn">I'm ready</button></div></div>
+<div id="over" class="pass hidden"><div><h2 id="over-title"></h2><button id="over-btn">Play again</button></div></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
