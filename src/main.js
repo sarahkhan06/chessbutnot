@@ -1,7 +1,10 @@
 import { Chess } from 'chess.js';
+import Peer from 'peerjs';
 
 const GLYPH = { p:'♙', n:'♘', b:'♗', r:'♖', q:'♕', k:'♔' };
 let game, selected, legal, mirror, lastMove, captured, pending;
+let me = null, conn = null, peer = null, ready = true, gone = false;
+const view = () => me || game.turn();
 
 const $ = (id) => document.getElementById(id);
 const boardEl = $('board');
@@ -13,7 +16,7 @@ function init() {
   captured = { w: [], b: [] }; // pieces lost by each colour (revealed)
   $('over').classList.add('hidden');
   render();
-  showPass();
+  $("pass").classList.add("hidden");
 }
 
 function showPass() {
@@ -23,7 +26,7 @@ function showPass() {
 }
 
 function render() {
-  const turn = game.turn();
+  const turn = view();
   // Board is oriented toward the player to move
   const files = turn === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
   const ranks = turn === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0]; // index 0 = rank 8 row for white view
@@ -42,8 +45,8 @@ function render() {
       if (piece) {
         const c = document.createElement('div');
         const own = piece.color === turn;
-        c.className = 'card ' + (own || mirror ? (own ? 'own' : 'rev' + (piece.color === 'b' ? ' b' : '')) : 'foe');
-        if (own || mirror) c.textContent = GLYPH[piece.type];
+        c.className = 'card ' + (own || (mirror && !me) ? (own ? 'own' : 'rev' + (piece.color === 'b' ? ' b' : '')) : 'foe');
+        if (own || (mirror && !me)) c.textContent = GLYPH[piece.type];
         el.appendChild(c);
       }
       el.onclick = () => click(sqName);
@@ -51,7 +54,11 @@ function render() {
     }
   }
   const check = game.inCheck() ? ' — check!' : '';
-  $('status').textContent = `${name(turn)} to move${check}`;
+  const t = game.turn();
+  $('status').textContent = me
+    ? (gone ? 'Opponent disconnected' : !ready ? 'Waiting for your friend to join…' : `You are ${name(me)} — ${t === me ? 'your move' : `waiting for ${name(t)}`}${check}`)
+    : `${name(t)} to move${check}`;
+  $('undo').style.display = $('mirror').style.display = me ? 'none' : '';
   const fill = (id, color) => {
     const t = $(id); t.innerHTML = '';
     captured[color].forEach((p) => { const s = document.createElement('span'); s.textContent = GLYPH[p]; if (color === 'b') s.className = 'b'; t.appendChild(s); });
@@ -62,7 +69,8 @@ function render() {
 }
 
 function click(sq) {
-  if (pending || game.isGameOver()) return;
+  if (pending || !ready || game.isGameOver()) return;
+  if (me && game.turn() !== me) return;
   const piece = game.get(sq);
   if (selected && legal.includes(sq)) return move(selected, sq);
   if (piece && piece.color === game.turn()) {
@@ -72,7 +80,8 @@ function click(sq) {
   render();
 }
 
-function move(from, to) {
+function move(from, to, remote = false) {
+  if (me && !remote && conn) conn.send({ t: 'move', from, to });
   const piece = game.get(from);
   const promo = piece.type === 'p' && (to[1] === '8' || to[1] === '1') ? 'q' : undefined;
   const m = game.move({ from, to, promotion: promo });
@@ -89,12 +98,13 @@ function move(from, to) {
     return;
   }
   render();
-  showPass();
+  if (!me) showPass();
 }
 
 $('pass-btn').onclick = () => { $('pass').classList.add('hidden'); pending = false; render(); };
-$('over-btn').onclick = init;
-$('new').onclick = init;
+const restart = () => { if (me && conn) conn.send({ t: 'new' }); init(); };
+$('over-btn').onclick = restart;
+$('new').onclick = restart;
 $('mirror').onclick = () => { mirror = !mirror; render(); };
 $('undo').onclick = () => {
   const m = game.undo();
@@ -106,4 +116,39 @@ $('undo').onclick = () => {
   render(); showPass();
 };
 
+// ---- online (peer-to-peer via PeerJS) ----
+function wire(c) {
+  conn = c;
+  c.on('open', () => { ready = true; gone = false; render(); });
+  c.on('data', (d) => {
+    if (d.t === 'move' && game.turn() !== me) move(d.from, d.to, true);
+    else if (d.t === 'new') init();
+  });
+  c.on('close', () => { gone = true; render(); });
+}
+function host() {
+  const code = Math.random().toString(36).slice(2, 7);
+  me = 'w'; ready = false; $('status').textContent = 'Setting up…';
+  peer = new Peer('bc-' + code);
+  peer.on('open', () => {
+    $('link').value = `${location.origin}${location.pathname}?room=${code}`;
+    $('invite').classList.remove('hidden');
+    $('online').style.display = 'none';
+    init();
+  });
+  peer.on('connection', wire);
+  peer.on('error', (e) => { $('status').textContent = 'Connection error: ' + e.type; });
+}
+function join(code) {
+  me = 'b'; ready = false;
+  peer = new Peer();
+  peer.on('open', () => wire(peer.connect('bc-' + code, { reliable: true })));
+  peer.on('error', (e) => { $('status').textContent = 'Could not join: ' + e.type; });
+  $('online').style.display = 'none';
+}
+$('online').onclick = host;
+$('copy').onclick = () => { $('link').select(); navigator.clipboard?.writeText($('link').value); $('copy').textContent = 'Copied!'; };
+
+const room = new URLSearchParams(location.search).get('room');
+if (room) join(room);
 init();

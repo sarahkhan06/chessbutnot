@@ -28,3 +28,4 @@ button:active{transform:scale(.97)}
 .pass{position:fixed;inset:0;background:#06233f;display:flex;align-items:center;justify-content:center;text-align:center;z-index:10}
 .pass.hidden{display:none}
 .pass h2{font-size:1.8rem;margin:0 0 8px}
+.invite{display:flex;gap:8px;margin-top:10px}.invite.hidden{display:none}.invite input{flex:1;min-width:0;padding:10px;border-radius:10px;border:0;font:inherit}
