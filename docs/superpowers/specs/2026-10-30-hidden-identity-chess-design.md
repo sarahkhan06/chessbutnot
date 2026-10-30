@@ -84,15 +84,31 @@ rules on one machine.
 
 ### Capture
 
-- Moving onto an opponent's piece captures it. The captured piece's
-  identity is revealed to both players and shown in the captor's tray.
+- Moving onto an opponent's piece captures it. The captured piece leaves
+  the board immediately on both screens, but its identity is **not yet
+  revealed**. It appears in the captor's tray as a blank "pending" card.
+- The capture is **provisional** until the opponent accepts it, either by
+  making their own move or by challenging it and losing. At that moment
+  the captured piece's identity is revealed to both players, the tray card
+  flips face-up, and any pawn transformation is applied.
+- If the capture was a bluff and the opponent challenges successfully,
+  the captured piece returns to its square, still hidden. Its identity was
+  never sent, so nothing leaked.
 - The capturing piece's identity is **not** revealed by capturing.
 
 ### Winning
 
-- You win the moment you capture the opponent's king. The game ends
-  immediately.
+- You win when a capture of the opponent's king is **accepted**: the
+  opponent either moves on (implicitly accepting) or challenges the
+  capturing move and loses. The game ends at that moment, not at the
+  instant of the capture. This means a bluff onto the king square can be
+  challenged and punished like any other bluff.
+- The opponent is not told that the pending capture was their king. From
+  their side it looks like any other pending capture, and they know what
+  was on that square anyway.
 - A successful challenge penalty (below) that removes the king also wins.
+- If a successful challenge removes a bluffing king itself, the challenger
+  wins immediately with no penalty pick.
 - There is no stalemate or draw by rule. (Players may simply agree to stop.)
 
 ### Challenge
@@ -104,10 +120,8 @@ rules on one machine.
   identity):
   - The moved piece is removed from the board and revealed in your tray.
   - If the move was a capture, the captured piece is **restored** to its
-    square, still hidden (its identity was never revealed since the bluff
-    is undone). If the bluffing piece was a pawn that had transformed on
-    that capture, the transformation is undone with it, which is moot
-    since it is removed anyway.
+    square, still hidden. Its identity was never sent because the capture
+    was still provisional. The pending tray card disappears.
   - You then pick any one remaining opponent piece on the board as the
     **penalty capture**. It is removed and revealed. If it is the king, you
     win.
@@ -116,7 +130,10 @@ rules on one machine.
   - The challenged piece is turned face-up for the rest of the game. Both
     players see its identity on the board from now on. If it later moves,
     it stays face-up.
-  - The move stands. It is then your normal turn: you move.
+  - The move stands. If it was a capture, the capture is now accepted:
+    you reveal the captured piece's identity, and if it was your king the
+    game is over.
+  - Otherwise it is then your normal turn: you move.
 - Only the most recent move can be challenged. A move that is not
   challenged can never be challenged later.
 - You cannot challenge the very first move of the game before any move
@@ -165,7 +182,9 @@ Each client holds:
   move (from, to, whether it was a capture), whether the last move is
   still challengeable, and the phase (setup / play / over).
 - **Private state**: the true identity of each of *its own* pieces,
-  including transformations from pawn captures and promotions.
+  including transformations from pawn captures and promotions. A pawn
+  transformation from a provisional capture is applied only when the
+  capture is accepted, since the identity is unknown until then.
 
 The opponent's client never receives private state except through the
 reveal events defined by the rules.
@@ -192,10 +211,13 @@ or from the wrong color for the current turn.
   private. The hash lets the client later prove the arrangement wasn't
   changed if that is ever needed. Builder's call whether to include it.
 - `move { from, to }` — the mover's move. Positions only, no identity.
-- `captured { square, type }` — sent by the *defender* in response to a
-  move that landed on their piece, naming the captured piece's identity.
-  The mover's client needs this both to show it in the tray and to apply
-  pawn transformation.
+- `captured { square, type }` — sent by the *defender* when it accepts a
+  provisional capture (by moving, or by losing a challenge against it),
+  naming the captured piece's identity. It is sent immediately before the
+  defender's own `move`, or immediately after a `verdict { legal: true }`
+  is received for the capturing move. The mover's client needs it to flip
+  the tray card, apply pawn transformation, and detect a king capture.
+  Never sent while the capture is still challengeable.
 - `challenge` — the opponent challenges the last move.
 - `verdict { legal: bool, type? }` — the mover's client answers a
   challenge. If `legal` is true, `type` is the challenged piece's identity
@@ -239,25 +261,29 @@ an identity the receiver is not entitled to under the rules.
 
 1. Mover selects a piece; their screen shows legal destinations in one
    style and bluff destinations in another. Mover picks a destination.
-2. Mover's client applies the move locally and sends `move`.
-3. Opponent's client applies the move. If it captured one of the
-   opponent's pieces, the opponent's client sends `captured` and both
-   sides reveal it in the tray; the mover's client applies pawn
-   transformation if relevant. If the captured piece is the king, game
-   over.
-4. Opponent now sees "Challenge" and may also simply move.
-   - Move: the last move becomes unchallengeable; go to step 1 with
-     colors swapped.
+2. Mover's client applies the move locally and sends `move`. If the move
+   captured, the captured piece leaves the board on both screens and a
+   blank pending card appears in the mover's tray. No identity travels.
+3. Opponent's client applies the move. Opponent now sees "Challenge" and
+   may also simply move.
+   - Move: the last move becomes unchallengeable. If it was a capture the
+     opponent's client first sends `captured` with the identity; the
+     mover's tray card flips, pawn transformation applies, and if it was
+     the king the game is over instead of continuing. Otherwise the
+     opponent's `move` follows and we go to step 1 with colors swapped.
    - Challenge: send `challenge`. Mover's client checks its private state,
      sends `verdict`.
-     - Legal: both sides mark the piece face-up with its type. Opponent
-       moves (step 1, colors swapped). The verdict's move is no longer
+     - Legal: both sides mark the piece face-up with its type. If the
+       move was a capture the opponent's client now sends `captured` as
+       above (possible game over on king). Otherwise the opponent moves
+       (step 1, colors swapped). The verdict's move is no longer
        challengeable.
      - Bluff: both sides remove the bluffing piece (revealed in tray) and
-       restore any captured piece to its square. Opponent picks a penalty
-       square, sends `penalty`; mover's client sends `removed`; both sides
-       remove and reveal it. If king, game over. Otherwise the opponent
-       moves (step 1, colors swapped).
+       restore any captured piece to its square, still hidden. If the
+       removed bluffer was the king, game over. Otherwise the opponent
+       picks a penalty square, sends `penalty`; mover's client sends
+       `removed`; both sides remove and reveal it. If king, game over.
+       Otherwise the opponent moves (step 1, colors swapped).
 
 ## UI
 
@@ -277,8 +303,10 @@ Additions:
   confirmation.
 - A penalty-pick mode: after a successful challenge, the status line says
   "Pick a piece to remove" and tapping an opponent piece removes it.
+- Pending capture card: a blank card in the captor's tray with a subtle
+  "?" that flips to the glyph when the capture is accepted.
 - Game-over screen text: "White captured the king", "Black's king was
-  taken as a penalty", etc.
+  taken as a penalty", "White's king was caught bluffing", etc.
 - Connection status in the header for online play.
 - Remove the Undo button. Keep Mirror for hot-seat only.
 
@@ -314,8 +342,10 @@ Additions:
   the cost of a bad accusation.
 - The penalty capture can target any piece, including the king, so a
   caught bluff can lose the game outright.
-- When a bluffing capture is reverted, the captured piece is restored
-  hidden and its identity stays secret.
+- Captures are provisional until accepted (owner's decision, 2026-10-30):
+  the captured piece's identity is revealed and king-capture wins only
+  once the opponent moves on or loses a challenge against the capture. A
+  reverted bluff-capture restores the piece hidden with nothing leaked.
 - Promotion is always to a queen and is silent.
 - Hot-seat stays, Undo goes.
 - Transport stays PeerJS with no TURN server.
