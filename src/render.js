@@ -47,6 +47,7 @@ export function render(game, ui, onClick) {
       const sqName = FILES[file] + rank;
       const el = document.createElement('div');
       el.className = 'sq' + ((file + rank) % 2 ? ' dk' : '');
+      el.dataset.sq = sqName;
       if (pub.lastMove && (pub.lastMove.from === sqName || pub.lastMove.to === sqName)) el.classList.add('last');
       if (sqName === ui.selected) el.classList.add('sel');
       if (destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');

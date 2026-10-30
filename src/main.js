@@ -128,6 +128,7 @@ function goOnline(color, code, snapshot) {
     $('invite').classList.remove('hidden');
   }
   net = connect({ room: code, host: color === 'w', onMessage, onStatus, onOpen });
+  window.__hic = { get game() { return game; }, get net() { return net; } };
   onChange();
 }
 
