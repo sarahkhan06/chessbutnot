@@ -1,222 +1,154 @@
-import { Chess } from 'chess.js';
-import Peer from 'peerjs';
-
-const GLYPH = { p:'♙', n:'♘', b:'♗', r:'♖', q:'♕', k:'♔' };
-const STD = [...'rnbqkbnr', ...'pppppppp'];
-const OPTS = { skipValidation: true };
-let game = new Chess();
-let selected, legal, mirror, lastMove, captured, pending, phase, arr, stage, setupColor;
-let me = null, conn = null, peer = null, ready = true, gone = false;
+import { Game } from './game.js';
+import { connect } from './net.js';
+import { saveGame, loadGame, clearGame } from './storage.js';
+import { render, name } from './render.js';
+import { pieceAt } from './rules/state.js';
 
 const $ = (id) => document.getElementById(id);
-const boardEl = $('board');
-const name = (c) => (c === 'w' ? 'White' : 'Black');
-const active = () => me || (phase === 'setup' ? setupColor : game.turn());
-const rowStr = (a, i, up) => { const s = a.slice(i, i + 8).join(''); return up ? s.toUpperCase() : s; };
-const fen = () => `${rowStr(arr.b, 0)}/${rowStr(arr.b, 8)}/8/8/8/8/${rowStr(arr.w, 8, true)}/${rowStr(arr.w, 0, true)} w - - 0 1`;
-const backRank = (c) => (c === 'w' ? '1' : '8');
-const frontRank = (c) => (c === 'w' ? '2' : '7');
-const ownRow = (sq, c) => sq[1] === backRank(c) || sq[1] === frontRank(c);
-const slot = (sq, c) => (sq[1] === backRank(c) ? 0 : 8) + 'abcdefgh'.indexOf(sq[0]);
 
-function init() {
-  arr = { w: [...STD], b: [...STD] };
-  stage = { w: 'arranging', b: 'arranging' };
-  setupColor = 'w'; phase = 'setup';
-  selected = null; legal = []; mirror = false; lastMove = null; pending = false;
-  captured = { w: [], b: [] };
-  $('over').classList.add('hidden');
-  $('pass').classList.add('hidden');
-  render();
+let game, net = null, room = null, me = null, confirmTimer = null;
+const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false };
+
+// ---- rendering and persistence ----
+function draw() { render(game, ui, click); }
+function onChange() {
+  if (room && me) saveGame(room, me, game.snapshot());
+  draw();
 }
+function clearSelection() { ui.selected = null; ui.dests = []; }
 
+// ---- hot-seat hand-over ----
 function showPass(title) {
-  $('pass-title').textContent = title || `${name(game.turn())} to move`;
+  $('pass-title').textContent = title || `${name(game.pub.turn)} to move`;
   $('pass').classList.remove('hidden');
-  pending = true;
+  ui.passing = true;
 }
+$('pass-btn').onclick = () => { $('pass').classList.add('hidden'); ui.passing = false; draw(); };
 
-function render() {
-  if (phase === 'setup') game.load(fen(), OPTS);
-  const v = active();
-  const flip = v === 'b';
-  const idx = flip ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
-  boardEl.innerHTML = '';
-  const b = game.board();
-  const reveal = mirror && !me && phase === 'play';
-  for (let ri = 0; ri < 8; ri++) {
-    for (let fi = 0; fi < 8; fi++) {
-      const r = idx[ri], f = idx[fi];
-      const sqName = 'abcdefgh'[f] + (8 - r);
-      const piece = b[r][f];
-      const el = document.createElement('div');
-      el.className = 'sq' + ((r + f) % 2 ? ' dk' : '');
-      if (lastMove && (lastMove.from === sqName || lastMove.to === sqName)) el.classList.add('last');
-      if (sqName === selected) el.classList.add('sel');
-      if (legal.includes(sqName)) el.classList.add('mv');
-      if (phase === 'setup' && stage[v] === 'arranging' && ownRow(sqName, v)) el.classList.add('edit');
-      if (piece) {
-        const c = document.createElement('div');
-        const own = piece.color === v;
-        c.className = 'card ' + (own ? 'own' : reveal ? 'rev' + (piece.color === 'b' ? ' b' : '') : 'foe');
-        if (own || reveal) c.textContent = GLYPH[piece.type];
-        el.appendChild(c);
-      }
-      el.onclick = () => click(sqName);
-      boardEl.appendChild(el);
-    }
-  }
-  const setup = phase === 'setup';
-  $('setup').classList.toggle('hidden', !setup);
-  $('undo').style.display = $('mirror').style.display = me || setup ? 'none' : '';
-  const conNote = me && !ready ? (me === 'w' ? 'Waiting for your friend to join… ' : 'Connecting… ') : '';
-  if (setup) {
-    const s = stage[v];
-    $('pill').textContent = s === 'arranging' ? 'Rearranging' : s === 'done' ? 'Locked in' : 'Ready — waiting for opponent…';
-    $('done').style.display = s === 'arranging' ? '' : 'none';
-    $('ready').style.display = s === 'done' ? '' : 'none';
-    $('setup-hint').textContent = s === 'arranging' ? 'Tap two of your pieces to swap them — pawns too.'
-      : s === 'done' ? 'Your setup is locked. Ready up when you are.' : 'Game starts when both players are ready.';
-    $('status').textContent = conNote + (me ? `You are ${name(v)}` : `${name(v)}'s setup`);
-  } else {
-    const t = game.turn();
-    const check = game.inCheck() ? ' — check!' : '';
-    $('status').textContent = me
-      ? (gone ? 'Opponent disconnected' : `You are ${name(me)} — ${t === me ? 'your move' : `waiting for ${name(t)}`}${check}`)
-      : `${name(t)} to move${check}`;
-  }
-  const fill = (id, color) => {
-    const t = $(id); t.innerHTML = '';
-    captured[color].forEach((p) => { const s = document.createElement('span'); s.textContent = GLYPH[p]; if (color === 'b') s.className = 'b'; t.appendChild(s); });
-  };
-  fill('cap-top', v === 'w' ? 'b' : 'w');
-  fill('cap-bottom', v);
-}
-
+// ---- board clicks ----
 function click(sq) {
-  if (pending) return;
-  if (phase === 'setup') return setupClick(sq);
-  if (!ready || game.isGameOver()) return;
-  if (me && game.turn() !== me) return;
-  const piece = game.get(sq);
-  if (selected && legal.includes(sq)) return move(selected, sq);
-  if (piece && piece.color === game.turn()) {
-    selected = sq;
-    legal = game.moves({ square: sq, verbose: true }).map((m) => m.to);
-  } else { selected = null; legal = []; }
-  render();
-}
+  if (ui.passing || game.lostState) return;
+  const pub = game.pub, v = game.viewer();
+  const id = pieceAt(pub, sq);
+  const own = id && pub.pieces[id].color === v;
 
-function setupClick(sq) {
-  const v = active();
-  if (stage[v] !== 'arranging' || !ownRow(sq, v)) return;
-  if (!selected) selected = sq;
-  else if (selected === sq) selected = null;
-  else {
-    const i = slot(selected, v), j = slot(sq, v);
-    [arr[v][i], arr[v][j]] = [arr[v][j], arr[v][i]];
-    selected = null;
+  if (pub.phase === 'setup') {
+    if (pub.stage[v] !== 'arranging' || !own) { clearSelection(); return draw(); }
+    if (!ui.selected) ui.selected = sq;
+    else if (ui.selected === sq) ui.selected = null;
+    else { const a = ui.selected; ui.selected = null; game.swap(v, a, sq); }
+    return draw();
   }
-  render();
-}
+  if (pub.phase !== 'play') return;
 
-function sendReady() {
-  if (me && conn && conn.open) conn.send({ t: 'ready', arr: arr[me] });
-}
-function tryStart() {
-  if (stage.w === 'ready' && stage.b === 'ready') startGame();
-}
-function startGame() {
-  phase = 'play';
-  game = new Chess(fen(), OPTS);
-  mirror = false; lastMove = null; selected = null; legal = [];
-  captured = { w: [], b: [] };
-  render();
-  if (!me) showPass('White to move');
-}
-
-$('done').onclick = () => { const v = active(); stage[v] = 'done'; selected = null; render(); };
-$('ready').onclick = () => {
-  const v = active();
-  stage[v] = 'ready';
-  if (me) { sendReady(); render(); tryStart(); }
-  else if (v === 'w') { setupColor = 'b'; render(); showPass('Black: rearrange your pieces'); }
-  else { tryStart(); }
-};
-
-function move(from, to, remote = false) {
-  if (me && !remote && conn) conn.send({ t: 'move', from, to });
-  const piece = game.get(from);
-  const promo = piece.type === 'p' && (to[1] === '8' || to[1] === '1') ? 'q' : undefined;
-  const m = game.move({ from, to, promotion: promo });
-  if (m.captured) captured[m.color === 'w' ? 'b' : 'w'].push(m.captured);
-  lastMove = { from, to };
-  selected = null; legal = [];
-  if (game.isGameOver()) {
-    render();
-    let t = 'Draw';
-    if (game.isCheckmate()) t = `Checkmate — ${name(m.color)} wins`;
-    else if (game.isStalemate()) t = 'Stalemate';
-    $('over-title').textContent = t;
-    $('over').classList.remove('hidden');
+  if (pub.pending === 'penaltyPick') {
+    if (pub.turn === v && id && !own) game.pickPenalty(id);
     return;
   }
-  render();
-  if (!me) showPass();
+  if (pub.pending) return;
+
+  if (ui.selected && ui.dests.some((d) => d.to === sq)) {
+    const from = ui.selected;
+    clearSelection();
+    ui.confirmChallenge = false;
+    game.move(from, sq);
+    if (!me && game.pub.phase === 'play') showPass();
+    return;
+  }
+  if (own && pub.turn === v) {
+    ui.selected = sq;
+    ui.dests = game.destinations(sq);
+    if (ui.dests.some((d) => !d.legal)) hintBluffOnce();
+  } else clearSelection();
+  draw();
 }
 
-$('pass-btn').onclick = () => { $('pass').classList.add('hidden'); pending = false; render(); };
-const restart = () => { if (me && conn && conn.open) conn.send({ t: 'new' }); init(); };
-$('over-btn').onclick = restart;
-$('new').onclick = restart;
-$('mirror').onclick = () => { mirror = !mirror; render(); };
-$('undo').onclick = () => {
-  const m = game.undo();
-  if (!m) return;
-  if (m.captured) captured[m.color === 'w' ? 'b' : 'w'].pop();
-  const h = game.history({ verbose: true });
-  lastMove = h.length ? h[h.length - 1] : null;
-  selected = null; legal = [];
-  render(); showPass();
+function hintBluffOnce() {
+  try {
+    if (localStorage.getItem('hic:hintBluff')) return;
+    localStorage.setItem('hic:hintBluff', '1');
+  } catch { /* ignore */ }
+  ui.showBluffHint = true;
+  setTimeout(() => { ui.showBluffHint = false; draw(); }, 8000);
+}
+
+// ---- setup buttons ----
+$('done').onclick = () => { clearSelection(); game.lockIn(game.viewer()); };
+$('ready').onclick = () => {
+  const v = game.viewer();
+  game.readyUp(v);
+  if (!me) {
+    if (game.pub.phase === 'play') showPass('White to move');
+    else if (v === 'w') showPass('Black: arrange your pieces');
+  }
 };
 
-// ---- online (peer-to-peer via PeerJS) ----
-function wire(c) {
-  conn = c;
-  c.on('open', () => { ready = true; gone = false; if (me && stage[me] === 'ready') sendReady(); render(); });
-  c.on('data', (d) => {
-    if (d.t === 'move' && phase === 'play' && game.turn() !== me) move(d.from, d.to, true);
-    else if (d.t === 'ready' && phase === 'setup' && Array.isArray(d.arr) && [...d.arr].sort().join('') === 'bbknnppppppppqrr') {
-      const o = me === 'w' ? 'b' : 'w';
-      arr[o] = [...d.arr]; stage[o] = 'ready';
-      render(); tryStart();
-    } else if (d.t === 'new') init();
-  });
-  c.on('close', () => { gone = true; render(); });
-}
-function host() {
-  const code = Math.random().toString(36).slice(2, 7);
-  me = 'w'; ready = false; $('status').textContent = 'Setting up…';
-  peer = new Peer('bc-' + code);
-  peer.on('open', () => {
-    $('link').value = `${location.origin}${location.pathname}?room=${code}`;
-    $('invite').classList.remove('hidden');
-    $('online').style.display = 'none';
-    init();
-  });
-  peer.on('connection', wire);
-  peer.on('error', (e) => { $('status').textContent = 'Connection error: ' + e.type; });
-}
-function join(code) {
-  me = 'b'; ready = false;
-  peer = new Peer();
-  peer.on('open', () => wire(peer.connect('bc-' + code, { reliable: true })));
-  peer.on('error', (e) => { $('status').textContent = 'Could not join: ' + e.type; });
-  $('online').style.display = 'none';
-}
-$('online').onclick = host;
+// ---- challenge (two taps) ----
+$('challenge').onclick = () => {
+  clearTimeout(confirmTimer);
+  if (!ui.confirmChallenge) {
+    ui.confirmChallenge = true;
+    draw();
+    confirmTimer = setTimeout(() => { ui.confirmChallenge = false; draw(); }, 4000);
+    return;
+  }
+  ui.confirmChallenge = false;
+  clearSelection();
+  game.challenge();
+};
+
+// ---- misc buttons ----
+$('mirror').onclick = () => { ui.mirror = !ui.mirror; draw(); };
+const restart = () => {
+  clearSelection(); ui.mirror = false; ui.confirmChallenge = false;
+  if (room && me) clearGame(room, me);
+  game.newGame();
+};
+$('new').onclick = restart;
+$('over-btn').onclick = restart;
 $('copy').onclick = () => { $('link').select(); navigator.clipboard?.writeText($('link').value); $('copy').textContent = 'Copied!'; };
 
-const room = new URLSearchParams(location.search).get('room');
-if (room) join(room);
-init();
+// ---- online ----
+const send = (m) => { net?.send(m); };
+function onStatus(status, detail) { ui.connection = { status, detail }; draw(); }
+function onOpen() { send(game.helloMessage()); }
+function resendOutstanding() { const o = game.outstanding(); if (o) send(o); }
+function onMessage(m) {
+  if (m.t === 'hello') { const sync = game.onHello(m); if (sync) send(sync); resendOutstanding(); }
+  else if (m.t === 'sync') { game.syncFrom(m.pub); resendOutstanding(); }
+  else game.receive(m);
+}
+
+function goOnline(color, code, snapshot) {
+  room = code; me = color;
+  try {
+    game = snapshot ? Game.restore(snapshot, { send, onChange }) : new Game({ me: color, send, onChange });
+  } catch {
+    clearGame(code, 'w'); clearGame(code, 'b');
+    game = new Game({ me: color, send, onChange });
+  }
+  history.replaceState(null, '', `${location.pathname}?room=${code}`);
+  if (color === 'w') {
+    $('link').value = `${location.origin}${location.pathname}?room=${code}`;
+    $('invite').classList.remove('hidden');
+  }
+  net = connect({ room: code, host: color === 'w', onMessage, onStatus, onOpen });
+  window.__hic = { get game() { return game; }, get net() { return net; } };
+  onChange();
+}
+
+$('online').onclick = () => goOnline('w', Math.random().toString(36).slice(2, 7));
+
+// ---- boot ----
+const code = new URLSearchParams(location.search).get('room');
+if (code) {
+  const candidates = [loadGame(code, 'w'), loadGame(code, 'b')].filter(Game.isSnapshot);
+  // Prefer the most advanced save if this browser somehow holds both seats.
+  const saved = candidates.sort((a, b) => (b.pub.gen - a.pub.gen) || (b.pub.version - a.pub.version))[0];
+  if (!saved) { clearGame(code, 'w'); clearGame(code, 'b'); }
+  if (saved) goOnline(saved.me, code, saved);
+  else goOnline('b', code);
+} else {
+  game = new Game({ onChange });
+  draw();
+}
