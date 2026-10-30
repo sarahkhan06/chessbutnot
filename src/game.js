@@ -248,7 +248,17 @@ export class Game {
 
   syncFrom(pub) {
     if (!pub || pub.version <= this.pub.version) return false;
+    const before = this.pub;
     this.pub = structuredClone(pub);
+    // Apply any pawn transformations whose `captured` message we never saw.
+    if (this.me) {
+      const opp = other(this.me);
+      for (const e of this.pub.lost[opp]) {
+        if (!e.type || !e.by || this.pub.pieces[e.by].color !== this.me) continue;
+        const prev = before.lost[opp].find((x) => x.id === e.id);
+        if (!prev || prev.type === null) this.applyTransform(e.by, e.type);
+      }
+    }
     this.changed();
     return true;
   }

@@ -49,7 +49,7 @@ export function applyMove(state, from, to) {
   const lastMove = { from, to, pieceId: id, capturedId: targetId, challengeable: true, moverMoved: mover.moved, capturedMoved: targetId ? state.pieces[targetId].moved : null };
   if (targetId) {
     s.pieces[targetId].square = null;
-    s.lost[s.pieces[targetId].color].push({ id: targetId, type: null });
+    s.lost[s.pieces[targetId].color].push({ id: targetId, type: null, by: id });
   }
   s.pieces[id].square = to;
   s.pieces[id].moved = true;
@@ -91,7 +91,7 @@ export function resolveBluff(state, type) {
   const { pieceId, capturedId, to, capturedMoved } = s.lastMove;
   const color = s.pieces[pieceId].color;
   s.pieces[pieceId].square = null;
-  s.lost[color].push({ id: pieceId, type });
+  s.lost[color].push({ id: pieceId, type, by: null });
   if (capturedId) {
     s.pieces[capturedId].square = to;
     s.pieces[capturedId].moved = capturedMoved;
@@ -107,7 +107,7 @@ export function applyPenalty(state, id, type) {
   const s = clone(state);
   const color = s.pieces[id].color;
   s.pieces[id].square = null;
-  s.lost[color].push({ id, type });
+  s.lost[color].push({ id, type, by: null });
   s.pending = null; s.penaltyId = null;
   if (type === 'k') endGame(s, other(color), 'king-penalty');
   return bump(s);

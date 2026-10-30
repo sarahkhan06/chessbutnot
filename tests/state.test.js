@@ -20,7 +20,7 @@ describe('state reducers', () => {
   });
   it('applyMove onto enemy records a pending capture', () => {
     const s = capturePos();
-    expect(s.lost.b).toEqual([{ id: 'b11', type: null }]); expect(s.pieces.b11.square).toBeNull();
+    expect(s.lost.b).toEqual([{ id: 'b11', type: null, by: 'w12' }]); expect(s.pieces.b11.square).toBeNull();
     expect(s.lastMove.capturedId).toBe('b11'); expect(s.lastMove.capturedMoved).toBe(true);
   });
   it('applyMove rejects moving the wrong color or onto own piece or from empty', () => {
@@ -46,7 +46,7 @@ describe('state reducers', () => {
   });
   it('resolveBluff removes the bluffer, restores a captured piece hidden, enters penaltyPick', () => {
     const s = resolveBluff(capturePos(), 'n');
-    expect(s.pieces.w12.square).toBeNull(); expect(s.lost.w).toEqual([{ id: 'w12', type: 'n' }]);
+    expect(s.pieces.w12.square).toBeNull(); expect(s.lost.w).toEqual([{ id: 'w12', type: 'n', by: null }]);
     expect(s.pieces.b11.square).toBe('d5'); expect(s.pieces.b11.moved).toBe(true); expect(s.lost.b).toEqual([]);
     expect(s.pending).toBe('penaltyPick'); expect(s.turn).toBe('b'); expect(s.lastMove.challengeable).toBe(false);
   });
@@ -57,7 +57,7 @@ describe('state reducers', () => {
   it('applyPenalty removes and reveals; king ends the game', () => {
     const s = resolveBluff(applyMove(startPlay(createState()), 'e2', 'e5'), 'p');
     const s2 = applyPenalty(s, 'w0', 'r');
-    expect(s2.pieces.w0.square).toBeNull(); expect(s2.lost.w).toContainEqual({ id: 'w0', type: 'r' }); expect(s2.pending).toBeNull(); expect(s2.phase).toBe('play');
+    expect(s2.pieces.w0.square).toBeNull(); expect(s2.lost.w).toContainEqual({ id: 'w0', type: 'r', by: null }); expect(s2.pending).toBeNull(); expect(s2.phase).toBe('play');
     const s3 = applyPenalty(s, 'w4', 'k'); expect(s3.winner).toBe('b'); expect(s3.reason).toBe('king-penalty');
   });
   it('reducers never mutate and bump version', () => {

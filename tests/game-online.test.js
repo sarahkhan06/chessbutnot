@@ -24,7 +24,7 @@ describe('Game online', () => {
     const { w, b, flush, start } = pair(); start();
     w.move('e2', 'e4'); flush(); expect(b.pub.pieces.w12.square).toBe('e4');
     b.move('d7', 'd5'); flush(); w.move('e4', 'd5'); flush();
-    expect(b.pub.lost.b).toEqual([{ id: 'b11', type: null }]); expect(w.pub.lost.b).toEqual([{ id: 'b11', type: null }]);
+    expect(b.pub.lost.b).toEqual([{ id: 'b11', type: null, by: 'w12' }]); expect(w.pub.lost.b).toEqual([{ id: 'b11', type: null, by: 'w12' }]);
     b.move('g8', 'f6'); flush();
     expect(w.pub.lost.b[0].type).toBe('p'); expect(b.pub.lost.b[0].type).toBe('p'); expect(w.pub.lastMove.from).toBe('g8'); expect(w.pub.version).toBe(b.pub.version);
   });
@@ -38,9 +38,9 @@ describe('Game online', () => {
   it('bluff challenge over the wire: verdict, penalty, removed; identities only in those messages', () => {
     const { w, b, flush, start } = pair(); const wire = []; tap(w, wire); tap(b, wire); start();
     w.move('e2', 'e5'); flush(); b.challenge(); expect(b.pub.pending).toBe('awaitVerdict'); flush();
-    expect(b.pub.lost.w).toEqual([{ id: 'w12', type: 'p' }]); expect(b.pub.pending).toBe('penaltyPick'); expect(w.pub.pending).toBe('penaltyPick');
+    expect(b.pub.lost.w).toEqual([{ id: 'w12', type: 'p', by: null }]); expect(b.pub.pending).toBe('penaltyPick'); expect(w.pub.pending).toBe('penaltyPick');
     b.pickPenalty('w0'); expect(b.pub.pending).toBe('awaitRemoved'); flush();
-    expect(b.pub.lost.w).toContainEqual({ id: 'w0', type: 'r' }); expect(w.pub.pieces.w0.square).toBeNull(); expect(b.pub.pending).toBeNull(); expect(w.pub.pending).toBeNull();
+    expect(b.pub.lost.w).toContainEqual({ id: 'w0', type: 'r', by: null }); expect(w.pub.pieces.w0.square).toBeNull(); expect(b.pub.pending).toBeNull(); expect(w.pub.pending).toBeNull();
     const withType = wire.filter((m) => 'type' in m).map((m) => m.t); expect(new Set(withType)).toEqual(new Set(['verdict', 'removed']));
     b.move('e7', 'e5'); flush(); expect(w.pub.turn).toBe('w');
   });
@@ -56,7 +56,7 @@ describe('Game online', () => {
     for (const [f, t] of [['e2','e4'],['a7','a6'],['e4','e5'],['a6','a5'],['e5','e6'],['a5','a4'],['e6','d7']]) { (w.pub.turn === 'w' ? w : b).move(f, t); flush(); }
     expect(w.pub.phase).toBe('play');
     b.challenge(); flush();
-    expect(w.pub.phase).toBe('over'); expect(b.pub.phase).toBe('over'); expect(w.pub.winner).toBe('w'); expect(w.pub.lost.b[0]).toEqual({ id: 'b11', type: 'k' });
+    expect(w.pub.phase).toBe('over'); expect(b.pub.phase).toBe('over'); expect(w.pub.winner).toBe('w'); expect(w.pub.lost.b[0]).toEqual({ id: 'b11', type: 'k', by: 'w12' });
   });
 
   it('bluff onto the king is reverted over the wire; penalty on the king wins for the challenger', () => {
@@ -110,5 +110,15 @@ describe('Game online', () => {
   it('new message resets the other side to setup', () => {
     const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush(); w.newGame(); flush();
     expect(b.pub.phase).toBe('setup'); expect(b.pub.pieces.w12.square).toBe('e2'); expect(b.priv.b.b4).toBe('k');
+  });
+
+  it('syncFrom applies a pawn transformation whose captured message was lost', () => {
+    const { w, b, flush, start, queue } = pair(); start();
+    w.move('e2', 'e4'); flush(); b.move('g8', 'f6'); flush(); w.move('e4', 'e5'); flush(); b.move('h7', 'h6'); flush(); w.move('e5', 'f6'); flush();
+    b.move('h6', 'h5');                     // b sends captured + move
+    queue.length = 0;                        // both lost on the wire
+    expect(w.priv.w.w12).toBe('p');
+    expect(w.syncFrom(b.pub)).toBe(true);
+    expect(w.priv.w.w12).toBe('n'); expect(w.pub.lost.b[0]).toMatchObject({ id: 'b6', type: 'n', by: 'w12' });
   });
 });
