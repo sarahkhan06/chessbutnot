@@ -27,7 +27,7 @@ $('pass-btn').onclick = () => { $('pass').classList.add('hidden'); ui.passing = 
 
 // ---- board clicks ----
 function click(sq) {
-  if (ui.passing) return;
+  if (ui.passing || game.lostState) return;
   const pub = game.pub, v = game.viewer();
   const id = pieceAt(pub, sq);
   const own = id && pub.pieces[id].color === v;
@@ -121,7 +121,12 @@ function onMessage(m) {
 
 function goOnline(color, code, snapshot) {
   room = code; me = color;
-  game = snapshot ? Game.restore(snapshot, { send, onChange }) : new Game({ me: color, send, onChange });
+  try {
+    game = snapshot ? Game.restore(snapshot, { send, onChange }) : new Game({ me: color, send, onChange });
+  } catch {
+    clearGame(code, 'w'); clearGame(code, 'b');
+    game = new Game({ me: color, send, onChange });
+  }
   history.replaceState(null, '', `${location.pathname}?room=${code}`);
   if (color === 'w') {
     $('link').value = `${location.origin}${location.pathname}?room=${code}`;
@@ -137,7 +142,10 @@ $('online').onclick = () => goOnline('w', Math.random().toString(36).slice(2, 7)
 // ---- boot ----
 const code = new URLSearchParams(location.search).get('room');
 if (code) {
-  const saved = loadGame(code, 'w') || loadGame(code, 'b');
+  const candidates = [loadGame(code, 'w'), loadGame(code, 'b')].filter(Game.isSnapshot);
+  // Prefer the most advanced save if this browser somehow holds both seats.
+  const saved = candidates.sort((a, b) => (b.pub.gen - a.pub.gen) || (b.pub.version - a.pub.version))[0];
+  if (!saved) { clearGame(code, 'w'); clearGame(code, 'b'); }
   if (saved) goOnline(saved.me, code, saved);
   else goOnline('b', code);
 } else {

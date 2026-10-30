@@ -17,10 +17,13 @@ export class Game {
     this.reset();
   }
 
-  reset() {
+  reset(gen = (this.pub?.gen ?? -1) + 1) {
     this.pub = createState();
+    this.pub.gen = gen;
     this.priv = { w: this.owns('w') ? standardIdentity('w') : null, b: this.owns('b') ? standardIdentity('b') : null };
     this.setupColor = 'w';
+    this.lastMoverType = null; // identity of the last moved piece *before* promotion, if we own it
+    this.lostState = false;    // set when a sync shows the other side thinks we are in a game we never arranged
   }
 
   owns(color) { return this.me === null || this.me === color; }
@@ -85,7 +88,10 @@ export class Game {
     const id = pieceAt(this.pub, from);
     const color = this.pub.pieces[id].color;
     this.pub = applyMove(this.pub, from, to);
-    if (this.owns(color)) this.priv[color] = promote(this.priv[color], id, to, color);
+    if (this.owns(color)) {
+      this.lastMoverType = this.priv[color][id];
+      this.priv[color] = promote(this.priv[color], id, to, color);
+    } else this.lastMoverType = null;
   }
 
   // The defender accepts a provisional capture: reveal the captured piece's identity.
@@ -106,10 +112,9 @@ export class Game {
 
   challenge() {
     if (!this.canChallenge()) return;
-    this.send({ t: 'challenge' });
     const mover = this.pub.pieces[this.pub.lastMove.pieceId].color;
-    if (this.owns(mover)) this.answerChallenge();
-    else this.pub = setPending(this.pub, 'awaitVerdict');
+    if (this.owns(mover)) { this.send({ t: 'challenge' }); this.answerChallenge(); }
+    else { this.pub = setPending(this.pub, 'awaitVerdict'); this.send({ t: 'challenge' }); }
     this.changed();
   }
 
@@ -117,14 +122,17 @@ export class Game {
   answerChallenge() {
     const { pieceId, capturedId } = this.pub.lastMove;
     const mover = this.pub.pieces[pieceId].color;
-    const type = this.priv[mover][pieceId];
-    if (isLastMoveLegal(this.pub, this.priv[mover])) {
+    // Judge the move by what the piece was when it moved (a pawn reaching the far rank has
+    // already been promoted privately); reveal its current identity if legal.
+    const movedAs = this.lastMoverType ?? this.priv[mover][pieceId];
+    if (isLastMoveLegal(this.pub, { ...this.priv[mover], [pieceId]: movedAs })) {
+      const type = this.priv[mover][pieceId];
       this.pub = resolveLegal(this.pub, type);
       this.send({ t: 'verdict', legal: true, type });
       if (capturedId) this.acceptCapture();
     } else {
-      this.pub = resolveBluff(this.pub, type);
-      this.send({ t: 'verdict', legal: false, type });
+      this.pub = resolveBluff(this.pub, movedAs);
+      this.send({ t: 'verdict', legal: false, type: movedAs });
     }
   }
 
@@ -132,13 +140,14 @@ export class Game {
     if (this.pub.phase !== 'play' || this.pub.pending !== 'penaltyPick' || this.pub.turn !== this.viewer()) return;
     const p = this.pub.pieces[id];
     if (!p || p.color === this.viewer() || p.square === null) return;
-    this.send({ t: 'penalty', id });
     if (this.owns(p.color)) {
+      this.send({ t: 'penalty', id });
       const type = this.priv[p.color][id];
       this.pub = applyPenalty(this.pub, id, type);
       this.send({ t: 'removed', id, type });
     } else {
       this.pub = setPending(this.pub, 'awaitRemoved', id);
+      this.send({ t: 'penalty', id });
     }
     this.changed();
   }
@@ -239,27 +248,47 @@ export class Game {
 
   // ---- reconnect handshake ----
   helloMessage() {
-    return { t: 'hello', version: this.pub.version, ready: this.pub.stage[this.me] === 'ready' };
+    return { t: 'hello', gen: this.pub.gen, version: this.pub.version, ready: this.pub.stage[this.me] === 'ready' };
+  }
+
+  // Newer = higher generation, or same generation and higher version.
+  isNewerThan(gen, version) {
+    return this.pub.gen > gen || (this.pub.gen === gen && this.pub.version > version);
   }
 
   // Returns a sync message to send if we are strictly newer, else null.
   onHello(msg) {
     if (!msg || typeof msg.version !== 'number') return null;
-    if (this.pub.phase === 'setup' && msg.ready) this.receive({ t: 'ready' });
-    return this.pub.version > msg.version ? { t: 'sync', pub: this.pub } : null;
+    const gen = msg.gen ?? 0;
+    if (gen === this.pub.gen && this.pub.phase === 'setup' && msg.ready) this.receive({ t: 'ready' });
+    return this.isNewerThan(gen, msg.version) ? { t: 'sync', pub: this.pub } : null;
   }
 
   // ---- persistence and sync ----
-  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor }; }
+  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor, lastMoverType: this.lastMoverType }; }
+
+  static isSnapshot(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (data.me !== 'w' && data.me !== 'b') return false;
+    const { pub, priv } = data;
+    if (!pub || typeof pub !== 'object' || !pub.pieces || typeof pub.version !== 'number' || !pub.lost || !pub.stage) return false;
+    if (!priv || typeof priv !== 'object' || !priv[data.me] || typeof priv[data.me] !== 'object') return false;
+    return Object.keys(pub.pieces).length === 32;
+  }
 
   static restore(data, { send, onChange } = {}) {
     const g = new Game({ me: data.me, send, onChange });
-    g.pub = data.pub; g.priv = data.priv; g.setupColor = data.setupColor ?? 'w';
+    g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null };
+    g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     return g;
   }
 
   syncFrom(pub) {
-    if (!pub || pub.version <= this.pub.version) return false;
+    if (!pub || typeof pub !== 'object') return false;
+    const gen = pub.gen ?? 0;
+    if (gen < this.pub.gen || (gen === this.pub.gen && pub.version <= this.pub.version)) return false;
+    if (gen > this.pub.gen) this.reset(gen); // a new game we never heard about: fresh identities
+    else if (this.me && pub.stage?.[this.me] === 'ready' && this.pub.stage[this.me] !== 'ready') this.lostState = true;
     const before = this.pub;
     this.pub = structuredClone(pub);
     // Apply any pawn transformations whose `captured` message we never saw.

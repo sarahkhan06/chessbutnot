@@ -93,7 +93,8 @@ export function render(game, ui, onClick) {
   }
 
   let status;
-  if (setup) status = online ? `You are ${name(v)}` : `${name(v)}'s setup`;
+  if (game.lostState) status = 'Your saved game for this room was lost on this device. Start a new game.';
+  else if (setup) status = online ? `You are ${name(v)}` : `${name(v)}'s setup`;
   else if (play) {
     if (pub.pending === 'penaltyPick' && pub.turn === v) status = 'Challenge succeeded — pick a piece to remove';
     else if (pub.pending === 'penaltyPick') status = `${name(pub.turn)} is picking a penalty…`;
@@ -114,7 +115,7 @@ export function render(game, ui, onClick) {
   } else conn.className = 'conn hidden';
 
   const ch = $('challenge');
-  ch.classList.toggle('hidden', !game.canChallenge());
+  ch.classList.toggle('hidden', !game.canChallenge() || game.lostState);
   ch.textContent = ui.confirmChallenge ? 'Challenge — sure?' : 'Challenge last move';
   if (ui.confirmChallenge) ch.dataset.confirm = '1'; else delete ch.dataset.confirm;
   $('mirror').style.display = !online && play ? '' : 'none';

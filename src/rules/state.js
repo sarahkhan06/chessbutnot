@@ -14,7 +14,7 @@ export function createState() {
     }
   }
   return {
-    phase: 'setup', turn: 'w', version: 0,
+    phase: 'setup', turn: 'w', version: 0, gen: 0,
     stage: { w: 'arranging', b: 'arranging' },
     pieces, lost: { w: [], b: [] },
     lastMove: null, pending: null, penaltyId: null,
