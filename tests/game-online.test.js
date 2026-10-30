@@ -121,4 +121,37 @@ describe('Game online', () => {
     expect(w.syncFrom(b.pub)).toBe(true);
     expect(w.priv.w.w12).toBe('n'); expect(w.pub.lost.b[0]).toMatchObject({ id: 'b6', type: 'n', by: 'w12' });
   });
+
+  describe('reconnect handshake', () => {
+    it('a lost verdict leaves the mover strictly newer so hello triggers a sync', () => {
+      const { w, b, flush, start, queue } = pair(); start();
+      w.move('e2', 'e5'); flush(); b.challenge(); flush();   // w resolves the bluff
+      expect(w.pub.pending).toBe('penaltyPick');
+      // Simulate: b never received the verdict.
+      const bStale = Game.restore(JSON.parse(JSON.stringify(b.snapshot())), {});
+      bStale.pub.pending = 'awaitVerdict'; bStale.pub.lost.w = []; bStale.pub.pieces.w12.square = 'e5'; bStale.pub.lastMove.challengeable = true;
+      bStale.pub.version = w.pub.version - 1; // what b would have had without the verdict's bumps
+      expect(w.onHello(bStale.helloMessage())).toMatchObject({ t: 'sync' });
+      expect(bStale.onHello(w.helloMessage())).toBeNull();
+      bStale.syncFrom(w.pub); expect(bStale.pub.pending).toBe('penaltyPick'); expect(bStale.outstanding()).toBeNull();
+    });
+    it('setting a pending request does not bump the version', () => {
+      const { w, b, flush, start } = pair(); start();
+      w.move('e2', 'e5'); flush(); const v = b.pub.version; b.challenge();
+      expect(b.pub.pending).toBe('awaitVerdict'); expect(b.pub.version).toBe(v);
+    });
+    it('a lost ready is recovered from the hello message', () => {
+      const { w, b } = pair(); w.readyUp('w'); b.readyUp('b'); // both sends dropped (no flush)
+      expect(w.pub.phase).toBe('setup');
+      expect(w.helloMessage()).toMatchObject({ t: 'hello', ready: true });
+      w.onHello(b.helloMessage()); b.onHello(w.helloMessage());
+      expect(w.pub.phase).toBe('play'); expect(b.pub.phase).toBe('play');
+    });
+    it('hello with an older version returns no sync; newer side offers one', () => {
+      const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4');
+      expect(b.onHello(w.helloMessage())).toBeNull();
+      expect(w.onHello(b.helloMessage())).toEqual({ t: 'sync', pub: w.pub });
+      flush();
+    });
+  });
 });

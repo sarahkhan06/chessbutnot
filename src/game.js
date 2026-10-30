@@ -237,6 +237,18 @@ export class Game {
     return null;
   }
 
+  // ---- reconnect handshake ----
+  helloMessage() {
+    return { t: 'hello', version: this.pub.version, ready: this.pub.stage[this.me] === 'ready' };
+  }
+
+  // Returns a sync message to send if we are strictly newer, else null.
+  onHello(msg) {
+    if (!msg || typeof msg.version !== 'number') return null;
+    if (this.pub.phase === 'setup' && msg.ready) this.receive({ t: 'ready' });
+    return this.pub.version > msg.version ? { t: 'sync', pub: this.pub } : null;
+  }
+
   // ---- persistence and sync ----
   snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor }; }
 

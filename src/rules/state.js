@@ -36,7 +36,9 @@ export function occupancy(state, color) {
 
 export const setStage = (state, color, stage) => bump({ ...clone(state), stage: { ...state.stage, [color]: stage } });
 export const startPlay = (state) => bump({ ...clone(state), phase: 'play', turn: 'w' });
-export const setPending = (state, pending, penaltyId = null) => bump({ ...clone(state), pending, penaltyId });
+// Local bookkeeping only: deliberately does not bump `version`, so a side waiting on a reply
+// is never "newer" than the side that already answered it.
+export const setPending = (state, pending, penaltyId = null) => ({ ...clone(state), pending, penaltyId });
 
 export function applyMove(state, from, to) {
   const id = pieceAt(state, from);
