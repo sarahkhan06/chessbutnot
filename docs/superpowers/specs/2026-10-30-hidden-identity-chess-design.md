@@ -206,9 +206,9 @@ or from the wrong color for the current turn.
 - `removed { square, type }` — the owner reveals the penalised piece's
   identity. If it is the king, the game is over.
 - `new` — propose a rematch; both sides reset to setup.
-- `sync { publicState }` — full public state, sent by the host after a
-  reconnect; the joiner adopts it if its version is older. Private state
-  is never in a sync.
+- `sync { publicState }` — full public state, sent after a reconnect by
+  whichever side has the newer version; the other side adopts it. Private
+  state is never in a sync.
 
 The builder may collapse or rename messages as long as no message carries
 an identity the receiver is not entitled to under the rules.
@@ -216,12 +216,22 @@ an identity the receiver is not entitled to under the rules.
 ### Reconnect and refresh
 
 - Both clients persist their full state (public and private) to
-  `sessionStorage` after every change, keyed by room code and color.
+  `localStorage` after every change, keyed by room code and color. Per-tab
+  storage is not enough: on a phone the friend re-taps the invite link and
+  gets a fresh tab.
+- The host's URL also carries the room code (pushed into the address bar
+  when the room is created) so a host refresh can restore too.
 - On page load with a room code and saved state for that room, the client
   restores and reconnects instead of starting fresh.
 - The host keeps its PeerJS id stable (derived from the room code) so the
   joiner can always find it. The joiner reconnects to that id. The host
-  accepts a new connection from the joiner's color and sends `sync`.
+  accepts a new connection from the joiner's color.
+- On (re)connect both sides exchange `hello` with their public state
+  version. Whichever side is newer sends `sync`; the older side adopts it.
+  A side that has an unanswered request outstanding (a `move` awaiting
+  `captured`, a `challenge` awaiting `verdict`, a `penalty` awaiting
+  `removed`) re-sends it after sync. A client must never silently drop
+  its own last action; if adopting a sync would discard it, re-send it.
 - The UI shows connection state at all times: connecting, connected,
   opponent disconnected (with "waiting for them to come back").
 
@@ -309,3 +319,8 @@ Additions:
 - Promotion is always to a queen and is silent.
 - Hot-seat stays, Undo goes.
 - Transport stays PeerJS with no TURN server.
+- Saved state lives in `localStorage` keyed by room and color, and the
+  host URL carries the room code, so either side can refresh or reopen the
+  link and resume.
+- Reconnect sync is bidirectional: newest public state wins, and any
+  unanswered request is re-sent.
