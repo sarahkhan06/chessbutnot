@@ -2,7 +2,8 @@ import { Chess } from 'chess.js';
 import Peer from 'peerjs';
 
 const GLYPH = { p:'♙', n:'♘', b:'♗', r:'♖', q:'♕', k:'♔' };
-const STD = ['r','n','b','q','k','b','n','r'];
+const STD = [...'rnbqkbnr', ...'pppppppp'];
+const OPTS = { skipValidation: true };
 let game = new Chess();
 let selected, legal, mirror, lastMove, captured, pending, phase, arr, stage, setupColor;
 let me = null, conn = null, peer = null, ready = true, gone = false;
@@ -11,8 +12,12 @@ const $ = (id) => document.getElementById(id);
 const boardEl = $('board');
 const name = (c) => (c === 'w' ? 'White' : 'Black');
 const active = () => me || (phase === 'setup' ? setupColor : game.turn());
-const fen = () => `${arr.b.join('')}/pppppppp/8/8/8/8/PPPPPPPP/${arr.w.join('').toUpperCase()} w - - 0 1`;
+const rowStr = (a, i, up) => { const s = a.slice(i, i + 8).join(''); return up ? s.toUpperCase() : s; };
+const fen = () => `${rowStr(arr.b, 0)}/${rowStr(arr.b, 8)}/8/8/8/8/${rowStr(arr.w, 8, true)}/${rowStr(arr.w, 0, true)} w - - 0 1`;
 const backRank = (c) => (c === 'w' ? '1' : '8');
+const frontRank = (c) => (c === 'w' ? '2' : '7');
+const ownRow = (sq, c) => sq[1] === backRank(c) || sq[1] === frontRank(c);
+const slot = (sq, c) => (sq[1] === backRank(c) ? 0 : 8) + 'abcdefgh'.indexOf(sq[0]);
 
 function init() {
   arr = { w: [...STD], b: [...STD] };
@@ -32,7 +37,7 @@ function showPass(title) {
 }
 
 function render() {
-  if (phase === 'setup') game.load(fen());
+  if (phase === 'setup') game.load(fen(), OPTS);
   const v = active();
   const flip = v === 'b';
   const idx = flip ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
@@ -49,7 +54,7 @@ function render() {
       if (lastMove && (lastMove.from === sqName || lastMove.to === sqName)) el.classList.add('last');
       if (sqName === selected) el.classList.add('sel');
       if (legal.includes(sqName)) el.classList.add('mv');
-      if (phase === 'setup' && stage[v] === 'arranging' && sqName[1] === backRank(v)) el.classList.add('edit');
+      if (phase === 'setup' && stage[v] === 'arranging' && ownRow(sqName, v)) el.classList.add('edit');
       if (piece) {
         const c = document.createElement('div');
         const own = piece.color === v;
@@ -70,7 +75,7 @@ function render() {
     $('pill').textContent = s === 'arranging' ? 'Rearranging' : s === 'done' ? 'Locked in' : 'Ready — waiting for opponent…';
     $('done').style.display = s === 'arranging' ? '' : 'none';
     $('ready').style.display = s === 'done' ? '' : 'none';
-    $('setup-hint').textContent = s === 'arranging' ? 'Tap two of your back-row pieces to swap them. Pawns stay put.'
+    $('setup-hint').textContent = s === 'arranging' ? 'Tap two of your pieces to swap them — pawns too.'
       : s === 'done' ? 'Your setup is locked. Ready up when you are.' : 'Game starts when both players are ready.';
     $('status').textContent = conNote + (me ? `You are ${name(v)}` : `${name(v)}'s setup`);
   } else {
@@ -104,11 +109,11 @@ function click(sq) {
 
 function setupClick(sq) {
   const v = active();
-  if (stage[v] !== 'arranging' || sq[1] !== backRank(v)) return;
+  if (stage[v] !== 'arranging' || !ownRow(sq, v)) return;
   if (!selected) selected = sq;
   else if (selected === sq) selected = null;
   else {
-    const i = 'abcdefgh'.indexOf(selected[0]), j = 'abcdefgh'.indexOf(sq[0]);
+    const i = slot(selected, v), j = slot(sq, v);
     [arr[v][i], arr[v][j]] = [arr[v][j], arr[v][i]];
     selected = null;
   }
@@ -123,7 +128,7 @@ function tryStart() {
 }
 function startGame() {
   phase = 'play';
-  game = new Chess(fen());
+  game = new Chess(fen(), OPTS);
   mirror = false; lastMove = null; selected = null; legal = [];
   captured = { w: [], b: [] };
   render();
@@ -181,7 +186,7 @@ function wire(c) {
   c.on('open', () => { ready = true; gone = false; if (me && stage[me] === 'ready') sendReady(); render(); });
   c.on('data', (d) => {
     if (d.t === 'move' && phase === 'play' && game.turn() !== me) move(d.from, d.to, true);
-    else if (d.t === 'ready' && phase === 'setup' && Array.isArray(d.arr) && [...d.arr].sort().join('') === 'bbknnqrr') {
+    else if (d.t === 'ready' && phase === 'setup' && Array.isArray(d.arr) && [...d.arr].sort().join('') === 'bbknnppppppppqrr') {
       const o = me === 'w' ? 'b' : 'w';
       arr[o] = [...d.arr]; stage[o] = 'ready';
       render(); tryStart();
