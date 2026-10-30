@@ -1,0 +1,114 @@
+import { describe, it, expect } from 'vitest';
+import { Game } from '../src/game.js';
+
+function pair() {
+  const queue = [];
+  const w = new Game({ me: 'w', send: (m) => queue.push(['b', m]) });
+  const b = new Game({ me: 'b', send: (m) => queue.push(['w', m]) });
+  const flush = () => { while (queue.length) { const [to, m] = queue.shift(); (to === 'w' ? w : b).receive(m); } };
+  const start = () => { w.readyUp('w'); b.readyUp('b'); flush(); };
+  return { w, b, flush, start, queue };
+}
+const tap = (game, wire) => { const orig = game.send; game.send = (m) => { wire.push(m); orig(m); }; };
+
+describe('Game online', () => {
+  it('only the owner holds identities', () => { const { w, b } = pair(); expect(w.priv.b).toBeNull(); expect(b.priv.w).toBeNull(); expect(w.priv.w.w4).toBe('k'); });
+
+  it('ready messages start play on both sides without sending arrangements', () => {
+    const { w, b, start } = pair(); const wire = []; tap(w, wire); tap(b, wire);
+    start();
+    expect(w.pub.phase).toBe('play'); expect(b.pub.phase).toBe('play'); expect(JSON.stringify(wire)).not.toMatch(/type/);
+  });
+
+  it('a move is mirrored; a capture stays pending until defender moves; then captured reveals on both', () => {
+    const { w, b, flush, start } = pair(); start();
+    w.move('e2', 'e4'); flush(); expect(b.pub.pieces.w12.square).toBe('e4');
+    b.move('d7', 'd5'); flush(); w.move('e4', 'd5'); flush();
+    expect(b.pub.lost.b).toEqual([{ id: 'b11', type: null }]); expect(w.pub.lost.b).toEqual([{ id: 'b11', type: null }]);
+    b.move('g8', 'f6'); flush();
+    expect(w.pub.lost.b[0].type).toBe('p'); expect(b.pub.lost.b[0].type).toBe('p'); expect(w.pub.lastMove.from).toBe('g8'); expect(w.pub.version).toBe(b.pub.version);
+  });
+
+  it('pawn transformation applies on the owner after captured arrives', () => {
+    const { w, b, flush, start } = pair(); start();
+    w.move('e2', 'e4'); flush(); b.move('g8', 'f6'); flush(); w.move('e4', 'e5'); flush(); b.move('h7', 'h6'); flush(); w.move('e5', 'f6'); flush();
+    expect(w.priv.w.w12).toBe('p'); b.move('h6', 'h5'); flush(); expect(w.priv.w.w12).toBe('n');
+  });
+
+  it('bluff challenge over the wire: verdict, penalty, removed; identities only in those messages', () => {
+    const { w, b, flush, start } = pair(); const wire = []; tap(w, wire); tap(b, wire); start();
+    w.move('e2', 'e5'); flush(); b.challenge(); expect(b.pub.pending).toBe('awaitVerdict'); flush();
+    expect(b.pub.lost.w).toEqual([{ id: 'w12', type: 'p' }]); expect(b.pub.pending).toBe('penaltyPick'); expect(w.pub.pending).toBe('penaltyPick');
+    b.pickPenalty('w0'); expect(b.pub.pending).toBe('awaitRemoved'); flush();
+    expect(b.pub.lost.w).toContainEqual({ id: 'w0', type: 'r' }); expect(w.pub.pieces.w0.square).toBeNull(); expect(b.pub.pending).toBeNull(); expect(w.pub.pending).toBeNull();
+    const withType = wire.filter((m) => 'type' in m).map((m) => m.t); expect(new Set(withType)).toEqual(new Set(['verdict', 'removed']));
+    b.move('e7', 'e5'); flush(); expect(w.pub.turn).toBe('w');
+  });
+
+  it('legal challenge exposes the piece on both sides', () => {
+    const { w, b, flush, start } = pair(); start();
+    w.move('b1', 'c3'); flush(); b.challenge(); flush();
+    expect(b.pub.pieces.w1.faceUp).toBe('n'); expect(w.pub.pieces.w1.faceUp).toBe('n'); expect(b.pub.pending).toBeNull();
+  });
+
+  it('legal challenge of a king capture ends the game on both sides', () => {
+    const { w, b, flush, start } = pair(); b.swap('b', 'e8', 'd7'); start();
+    for (const [f, t] of [['e2','e4'],['a7','a6'],['e4','e5'],['a6','a5'],['e5','e6'],['a5','a4'],['e6','d7']]) { (w.pub.turn === 'w' ? w : b).move(f, t); flush(); }
+    expect(w.pub.phase).toBe('play');
+    b.challenge(); flush();
+    expect(w.pub.phase).toBe('over'); expect(b.pub.phase).toBe('over'); expect(w.pub.winner).toBe('w'); expect(w.pub.lost.b[0]).toEqual({ id: 'b11', type: 'k' });
+  });
+
+  it('bluff onto the king is reverted over the wire; penalty on the king wins for the challenger', () => {
+    const { w, b, flush, start } = pair(); b.swap('b', 'e8', 'd7'); w.swap('w', 'e1', 'a1'); start();
+    w.move('d2', 'd7'); flush(); b.challenge(); flush();
+    expect(w.pub.pieces.b11.square).toBe('d7'); expect(b.pub.lost.b).toEqual([]);
+    b.pickPenalty('w0'); flush();
+    expect(w.pub.phase).toBe('over'); expect(b.pub.phase).toBe('over'); expect(b.pub.winner).toBe('b'); expect(b.pub.reason).toBe('king-penalty');
+  });
+
+  it('duplicate and out-of-turn messages are ignored (Review Focus 2)', () => {
+    const { w, b, flush, start } = pair(); start();
+    w.move('e2', 'e4'); flush(); const v = b.pub.version;
+    expect(b.receive({ t: 'move', from: 'e2', to: 'e4' })).toBe(false);
+    expect(b.receive({ t: 'move', from: 'd2', to: 'd4' })).toBe(false);
+    expect(b.receive({ t: 'move', from: 'e7', to: 'e5' })).toBe(false);
+    expect(b.receive({ t: 'captured', id: 'b11', type: 'q' })).toBe(false);
+    expect(b.receive({ t: 'verdict', legal: true, type: 'q' })).toBe(false);
+    expect(b.receive({ t: 'penalty', id: 'b4' })).toBe(false);
+    expect(b.receive({ t: 'removed', id: 'w0', type: 'r' })).toBe(false);
+    expect(b.pub.version).toBe(v); expect(w.pub.version).toBe(v);
+  });
+
+  it('a move onto an unreachable square from the opponent is rejected', () => {
+    const { w, b, start } = pair(); start();
+    expect(b.receive({ t: 'move', from: 'e2', to: 'f5' })).toBe(false);
+    expect(b.receive({ t: 'move', from: 'e2', to: 'e5' })).toBe(true);
+  });
+
+  it('outstanding() names the unanswered request (Review Focus 5)', () => {
+    const { w, b, flush, start } = pair(); start();
+    expect(b.outstanding()).toBeNull();
+    w.move('e2', 'e5'); flush(); b.challenge(); expect(b.outstanding()).toEqual({ t: 'challenge' }); flush();
+    b.pickPenalty('w0'); expect(b.outstanding()).toEqual({ t: 'penalty', id: 'w0' }); flush(); expect(b.outstanding()).toBeNull();
+  });
+
+  it('re-sent challenge after a verdict is ignored', () => {
+    const { w, b, flush, start } = pair(); start();
+    w.move('e2', 'e5'); flush(); b.challenge(); flush();
+  });
+
+  it('snapshot/restore round-trips and syncFrom adopts newer public state only', () => {
+    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush();
+    const r = Game.restore(JSON.parse(JSON.stringify(b.snapshot())), {});
+    expect(r.me).toBe('b'); expect(r.pub).toEqual(b.pub); expect(r.priv.b).toEqual(b.priv.b); expect(r.priv.w).toBeNull();
+    const stale = structuredClone(r.pub); b.move('e7', 'e5');
+    r.syncFrom(stale); expect(r.pub.lastMove.from).toBe('e2');
+    r.syncFrom(b.pub); expect(r.pub.lastMove.from).toBe('e7'); expect(r.pub.version).toBe(b.pub.version);
+  });
+
+  it('new message resets the other side to setup', () => {
+    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush(); w.newGame(); flush();
+    expect(b.pub.phase).toBe('setup'); expect(b.pub.pieces.w12.square).toBe('e2'); expect(b.priv.b.b4).toBe('k');
+  });
+});

@@ -1,9 +1,10 @@
 // Game orchestrator: one public state plus the private identities this client owns.
 // Local UI actions and incoming messages both flow through here; outgoing messages leave via `send`.
 import {
-  createState, pieceAt, setStage, startPlay, setPending, applyMove, acceptLastMove,
+  createState, pieceAt, occupancy, setStage, startPlay, setPending, applyMove, acceptLastMove,
   revealLost, resolveLegal, resolveBluff, applyPenalty,
 } from './rules/state.js';
+import { TYPES, destinations } from './rules/geometry.js';
 import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, legalDestinations } from './rules/identity.js';
 
 const other = (c) => (c === 'w' ? 'b' : 'w');
@@ -146,5 +147,109 @@ export class Game {
     this.reset();
     this.send({ t: 'new' });
     this.changed();
+  }
+
+  // ---- network: incoming ----
+  // Returns true if the message was valid and applied, false if ignored.
+  receive(msg) {
+    const ok = this.handle(msg);
+    if (ok) this.changed();
+    return ok;
+  }
+
+  handle(msg) {
+    if (!this.me || !msg || typeof msg !== 'object') return false;
+    const opp = other(this.me);
+    const pub = this.pub;
+    switch (msg.t) {
+      case 'ready': {
+        if (pub.phase !== 'setup' || pub.stage[opp] === 'ready') return false;
+        this.pub = setStage(pub, opp, 'ready');
+        this.tryStart();
+        return true;
+      }
+      case 'move': {
+        if (pub.phase !== 'play' || pub.pending !== null || pub.turn !== opp) return false;
+        const id = pieceAt(pub, msg.from);
+        if (!id || pub.pieces[id].color !== opp) return false;
+        if (!destinations(opp, msg.from, occupancy(pub, opp), pub.pieces[id].moved).some((d) => d.to === msg.to)) return false;
+        const lm = pub.lastMove;
+        if (lm?.challengeable) {
+          // Our capture must have been revealed (via `captured`) before the opponent moves on.
+          if (lm.capturedId && pub.lost[opp].find((e) => e.id === lm.capturedId)?.type === null) return false;
+          this.pub = acceptLastMove(pub);
+        }
+        this.applyLocalMove(msg.from, msg.to);
+        return true;
+      }
+      case 'captured': {
+        const lm = pub.lastMove;
+        if (pub.phase !== 'play' || !lm || lm.capturedId !== msg.id || !TYPES.includes(msg.type)) return false;
+        if (pub.pieces[msg.id].color !== opp || pub.lost[opp].find((e) => e.id === msg.id)?.type !== null) return false;
+        this.pub = acceptLastMove(revealLost(pub, msg.id, msg.type));
+        this.applyTransform(lm.pieceId, msg.type);
+        return true;
+      }
+      case 'challenge': {
+        const lm = pub.lastMove;
+        if (pub.phase !== 'play' || pub.pending !== null || !lm?.challengeable || pub.turn !== opp) return false;
+        if (pub.pieces[lm.pieceId].color !== this.me) return false;
+        this.answerChallenge();
+        return true;
+      }
+      case 'verdict': {
+        if (pub.phase !== 'play' || pub.pending !== 'awaitVerdict' || !TYPES.includes(msg.type)) return false;
+        if (msg.legal) {
+          this.pub = setPending(resolveLegal(pub, msg.type), null);
+          if (this.pub.lastMove.capturedId) this.acceptCapture();
+        } else {
+          this.pub = resolveBluff(pub, msg.type);
+        }
+        return true;
+      }
+      case 'penalty': {
+        if (pub.phase !== 'play' || pub.pending !== 'penaltyPick' || pub.turn !== opp) return false;
+        const p = pub.pieces[msg.id];
+        if (!p || p.color !== this.me || p.square === null) return false;
+        const type = this.priv[this.me][msg.id];
+        this.pub = applyPenalty(pub, msg.id, type);
+        this.send({ t: 'removed', id: msg.id, type });
+        return true;
+      }
+      case 'removed': {
+        if (pub.phase !== 'play' || pub.pending !== 'awaitRemoved' || pub.penaltyId !== msg.id || !TYPES.includes(msg.type)) return false;
+        this.pub = applyPenalty(pub, msg.id, msg.type);
+        return true;
+      }
+      case 'new': {
+        this.reset();
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+
+  // The request this client is still waiting on a reply for (re-sent after a reconnect).
+  outstanding() {
+    if (this.pub.pending === 'awaitVerdict') return { t: 'challenge' };
+    if (this.pub.pending === 'awaitRemoved') return { t: 'penalty', id: this.pub.penaltyId };
+    return null;
+  }
+
+  // ---- persistence and sync ----
+  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor }; }
+
+  static restore(data, { send, onChange } = {}) {
+    const g = new Game({ me: data.me, send, onChange });
+    g.pub = data.pub; g.priv = data.priv; g.setupColor = data.setupColor ?? 'w';
+    return g;
+  }
+
+  syncFrom(pub) {
+    if (!pub || pub.version <= this.pub.version) return false;
+    this.pub = structuredClone(pub);
+    this.changed();
+    return true;
   }
 }
