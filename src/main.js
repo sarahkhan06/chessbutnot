@@ -2,39 +2,46 @@ import { Chess } from 'chess.js';
 import Peer from 'peerjs';
 
 const GLYPH = { p:'♙', n:'♘', b:'♗', r:'♖', q:'♕', k:'♔' };
-let game, selected, legal, mirror, lastMove, captured, pending;
+const STD = ['r','n','b','q','k','b','n','r'];
+let game = new Chess();
+let selected, legal, mirror, lastMove, captured, pending, phase, arr, stage, setupColor;
 let me = null, conn = null, peer = null, ready = true, gone = false;
-const view = () => me || game.turn();
 
 const $ = (id) => document.getElementById(id);
 const boardEl = $('board');
 const name = (c) => (c === 'w' ? 'White' : 'Black');
+const active = () => me || (phase === 'setup' ? setupColor : game.turn());
+const fen = () => `${arr.b.join('')}/pppppppp/8/8/8/8/PPPPPPPP/${arr.w.join('').toUpperCase()} w - - 0 1`;
+const backRank = (c) => (c === 'w' ? '1' : '8');
 
 function init() {
-  game = new Chess();
+  arr = { w: [...STD], b: [...STD] };
+  stage = { w: 'arranging', b: 'arranging' };
+  setupColor = 'w'; phase = 'setup';
   selected = null; legal = []; mirror = false; lastMove = null; pending = false;
-  captured = { w: [], b: [] }; // pieces lost by each colour (revealed)
+  captured = { w: [], b: [] };
   $('over').classList.add('hidden');
+  $('pass').classList.add('hidden');
   render();
-  $("pass").classList.add("hidden");
 }
 
-function showPass() {
-  $('pass-title').textContent = `${name(game.turn())} to move`;
+function showPass(title) {
+  $('pass-title').textContent = title || `${name(game.turn())} to move`;
   $('pass').classList.remove('hidden');
   pending = true;
 }
 
 function render() {
-  const turn = view();
-  // Board is oriented toward the player to move
-  const files = turn === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
-  const ranks = turn === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0]; // index 0 = rank 8 row for white view
+  if (phase === 'setup') game.load(fen());
+  const v = active();
+  const flip = v === 'b';
+  const idx = flip ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
   boardEl.innerHTML = '';
   const b = game.board();
+  const reveal = mirror && !me && phase === 'play';
   for (let ri = 0; ri < 8; ri++) {
     for (let fi = 0; fi < 8; fi++) {
-      const r = ranks[ri], f = files[fi];
+      const r = idx[ri], f = idx[fi];
       const sqName = 'abcdefgh'[f] + (8 - r);
       const piece = b[r][f];
       const el = document.createElement('div');
@@ -42,34 +49,49 @@ function render() {
       if (lastMove && (lastMove.from === sqName || lastMove.to === sqName)) el.classList.add('last');
       if (sqName === selected) el.classList.add('sel');
       if (legal.includes(sqName)) el.classList.add('mv');
+      if (phase === 'setup' && stage[v] === 'arranging' && sqName[1] === backRank(v)) el.classList.add('edit');
       if (piece) {
         const c = document.createElement('div');
-        const own = piece.color === turn;
-        c.className = 'card ' + (own || (mirror && !me) ? (own ? 'own' : 'rev' + (piece.color === 'b' ? ' b' : '')) : 'foe');
-        if (own || (mirror && !me)) c.textContent = GLYPH[piece.type];
+        const own = piece.color === v;
+        c.className = 'card ' + (own ? 'own' : reveal ? 'rev' + (piece.color === 'b' ? ' b' : '') : 'foe');
+        if (own || reveal) c.textContent = GLYPH[piece.type];
         el.appendChild(c);
       }
       el.onclick = () => click(sqName);
       boardEl.appendChild(el);
     }
   }
-  const check = game.inCheck() ? ' — check!' : '';
-  const t = game.turn();
-  $('status').textContent = me
-    ? (gone ? 'Opponent disconnected' : !ready ? 'Waiting for your friend to join…' : `You are ${name(me)} — ${t === me ? 'your move' : `waiting for ${name(t)}`}${check}`)
-    : `${name(t)} to move${check}`;
-  $('undo').style.display = $('mirror').style.display = me ? 'none' : '';
+  const setup = phase === 'setup';
+  $('setup').classList.toggle('hidden', !setup);
+  $('undo').style.display = $('mirror').style.display = me || setup ? 'none' : '';
+  const conNote = me && !ready ? (me === 'w' ? 'Waiting for your friend to join… ' : 'Connecting… ') : '';
+  if (setup) {
+    const s = stage[v];
+    $('pill').textContent = s === 'arranging' ? 'Rearranging' : s === 'done' ? 'Locked in' : 'Ready — waiting for opponent…';
+    $('done').style.display = s === 'arranging' ? '' : 'none';
+    $('ready').style.display = s === 'done' ? '' : 'none';
+    $('setup-hint').textContent = s === 'arranging' ? 'Tap two of your back-row pieces to swap them. Pawns stay put.'
+      : s === 'done' ? 'Your setup is locked. Ready up when you are.' : 'Game starts when both players are ready.';
+    $('status').textContent = conNote + (me ? `You are ${name(v)}` : `${name(v)}'s setup`);
+  } else {
+    const t = game.turn();
+    const check = game.inCheck() ? ' — check!' : '';
+    $('status').textContent = me
+      ? (gone ? 'Opponent disconnected' : `You are ${name(me)} — ${t === me ? 'your move' : `waiting for ${name(t)}`}${check}`)
+      : `${name(t)} to move${check}`;
+  }
   const fill = (id, color) => {
     const t = $(id); t.innerHTML = '';
     captured[color].forEach((p) => { const s = document.createElement('span'); s.textContent = GLYPH[p]; if (color === 'b') s.className = 'b'; t.appendChild(s); });
   };
-  // top = what the opponent has lost, bottom = what I have lost
-  fill('cap-top', turn === 'w' ? 'b' : 'w');
-  fill('cap-bottom', turn);
+  fill('cap-top', v === 'w' ? 'b' : 'w');
+  fill('cap-bottom', v);
 }
 
 function click(sq) {
-  if (pending || !ready || game.isGameOver()) return;
+  if (pending) return;
+  if (phase === 'setup') return setupClick(sq);
+  if (!ready || game.isGameOver()) return;
   if (me && game.turn() !== me) return;
   const piece = game.get(sq);
   if (selected && legal.includes(sq)) return move(selected, sq);
@@ -79,6 +101,43 @@ function click(sq) {
   } else { selected = null; legal = []; }
   render();
 }
+
+function setupClick(sq) {
+  const v = active();
+  if (stage[v] !== 'arranging' || sq[1] !== backRank(v)) return;
+  if (!selected) selected = sq;
+  else if (selected === sq) selected = null;
+  else {
+    const i = 'abcdefgh'.indexOf(selected[0]), j = 'abcdefgh'.indexOf(sq[0]);
+    [arr[v][i], arr[v][j]] = [arr[v][j], arr[v][i]];
+    selected = null;
+  }
+  render();
+}
+
+function sendReady() {
+  if (me && conn && conn.open) conn.send({ t: 'ready', arr: arr[me] });
+}
+function tryStart() {
+  if (stage.w === 'ready' && stage.b === 'ready') startGame();
+}
+function startGame() {
+  phase = 'play';
+  game = new Chess(fen());
+  mirror = false; lastMove = null; selected = null; legal = [];
+  captured = { w: [], b: [] };
+  render();
+  if (!me) showPass('White to move');
+}
+
+$('done').onclick = () => { const v = active(); stage[v] = 'done'; selected = null; render(); };
+$('ready').onclick = () => {
+  const v = active();
+  stage[v] = 'ready';
+  if (me) { sendReady(); render(); tryStart(); }
+  else if (v === 'w') { setupColor = 'b'; render(); showPass('Black: rearrange your pieces'); }
+  else { tryStart(); }
+};
 
 function move(from, to, remote = false) {
   if (me && !remote && conn) conn.send({ t: 'move', from, to });
@@ -102,7 +161,7 @@ function move(from, to, remote = false) {
 }
 
 $('pass-btn').onclick = () => { $('pass').classList.add('hidden'); pending = false; render(); };
-const restart = () => { if (me && conn) conn.send({ t: 'new' }); init(); };
+const restart = () => { if (me && conn && conn.open) conn.send({ t: 'new' }); init(); };
 $('over-btn').onclick = restart;
 $('new').onclick = restart;
 $('mirror').onclick = () => { mirror = !mirror; render(); };
@@ -119,10 +178,14 @@ $('undo').onclick = () => {
 // ---- online (peer-to-peer via PeerJS) ----
 function wire(c) {
   conn = c;
-  c.on('open', () => { ready = true; gone = false; render(); });
+  c.on('open', () => { ready = true; gone = false; if (me && stage[me] === 'ready') sendReady(); render(); });
   c.on('data', (d) => {
-    if (d.t === 'move' && game.turn() !== me) move(d.from, d.to, true);
-    else if (d.t === 'new') init();
+    if (d.t === 'move' && phase === 'play' && game.turn() !== me) move(d.from, d.to, true);
+    else if (d.t === 'ready' && phase === 'setup' && Array.isArray(d.arr) && [...d.arr].sort().join('') === 'bbknnqrr') {
+      const o = me === 'w' ? 'b' : 'w';
+      arr[o] = [...d.arr]; stage[o] = 'ready';
+      render(); tryStart();
+    } else if (d.t === 'new') init();
   });
   c.on('close', () => { gone = true; render(); });
 }
