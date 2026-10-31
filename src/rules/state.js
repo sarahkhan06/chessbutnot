@@ -5,7 +5,8 @@ const other = (c) => (c === 'w' ? 'b' : 'w');
 const clone = (s) => structuredClone(s);
 const bump = (s) => { s.version += 1; return s; };
 
-// Move history: one entry per board-changing event, each with the board after it, so the UI can rewind.
+// Previous and current position only: lets a player see what just happened without turning the
+// game into a lookup (remembering how pieces moved is the deduction half of the game).
 function boardOf(s) {
   const board = {}, faceUp = {};
   for (const id in s.pieces) {
@@ -15,7 +16,7 @@ function boardOf(s) {
   }
   return { board, faceUp };
 }
-const record = (s, entry) => { s.history.push({ ...entry, ...boardOf(s) }); return s; };
+const record = (s, entry) => { s.history = [...s.history, { ...entry, ...boardOf(s) }].slice(-2); return s; };
 
 export function createState() {
   const pieces = {};

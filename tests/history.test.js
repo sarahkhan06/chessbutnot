@@ -4,20 +4,21 @@ import { Game } from '../src/game.js';
 
 const S = () => startPlay(createState());
 
-describe('move history', () => {
+describe('move history (previous position only)', () => {
   it('startPlay records the starting position as entry 0', () => {
     const s = S();
     expect(s.history.length).toBe(1);
     expect(s.history[0]).toMatchObject({ kind: 'start', board: { w12: 'e2', b4: 'e8' } });
+    expect(applyMove(s, 'e2', 'e4').history.map((e) => e.kind)).toEqual(['start', 'move']);
     expect(createState().history).toEqual([]);
   });
   it('applyMove records the move with a board snapshot after it', () => {
     let s = applyMove(S(), 'e2', 'e4'); s = applyMove(s, 'd7', 'd5'); s = applyMove(s, 'e4', 'd5');
-    expect(s.history.length).toBe(4);
-    expect(s.history[1]).toMatchObject({ kind: 'move', from: 'e2', to: 'e4', capture: false, board: { w12: 'e4' } });
-    expect(s.history[3]).toMatchObject({ kind: 'move', from: 'e4', to: 'd5', capture: true });
-    expect(s.history[3].board.w12).toBe('d5'); expect('b11' in s.history[3].board).toBe(false);
-    expect(s.history[1].board.w12).toBe('e4'); // earlier snapshots are untouched
+    // Only the previous and current positions are kept: enough to see what just happened, not to replay the game.
+    expect(s.history.length).toBe(2);
+    expect(s.history[0]).toMatchObject({ kind: 'move', from: 'd7', to: 'd5', board: { w12: 'e4', b11: 'd5' } });
+    expect(s.history[1]).toMatchObject({ kind: 'move', from: 'e4', to: 'd5', capture: true });
+    expect(s.history[1].board.w12).toBe('d5'); expect('b11' in s.history[1].board).toBe(false);
   });
   it('bluff, legal verdict and penalty each add an entry', () => {
     let s = applyMove(S(), 'e2', 'e4'); s = applyMove(s, 'd7', 'd5'); s = applyMove(s, 'e4', 'd5');

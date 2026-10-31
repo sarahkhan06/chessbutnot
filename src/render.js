@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 // Human label for a history entry; i is its index (ply number).
 export function historyLabel(e, i) {
   if (!e || e.kind === 'start') return 'Start';
-  if (e.kind === 'move') return `${i}. ${e.from}${e.capture ? '×' : '–'}${e.to}`;
+  if (e.kind === 'move') return `${e.from}${e.capture ? '×' : '–'}${e.to}`;
   if (e.kind === 'legal') return `Challenged: legal, ${GLYPH[e.type]} exposed`;
   if (e.kind === 'bluff') return `Bluff caught: ${GLYPH[e.type]} removed`;
   if (e.kind === 'penalty') return `Penalty: ${GLYPH[e.type]} taken on ${e.to}`;
@@ -153,10 +153,11 @@ export function render(game, ui, onClick) {
   const rp = $('replay');
   rp.classList.toggle('hidden', !(play || pub.phase === 'over') || hist.length < 2);
   rp.classList.toggle('reviewing', viewing);
-  const idx = viewing ? ui.viewPly : hist.length - 1;
-  $('rw-label').textContent = historyLabel(hist[idx], idx);
-  $('rw-first').disabled = idx === 0; $('rw-prev').disabled = idx === 0;
-  $('rw-next').disabled = !viewing; $('rw-last').disabled = !viewing;
+  const last = hist[hist.length - 1];
+  const label = historyLabel(last);
+  $('rw-label').textContent = viewing ? `Before: ${label}` : last?.kind === 'move' ? `Last move: ${label}` : label;
+  $('rw-prev').textContent = viewing ? '▶' : '◀';
+  $('rw-prev').title = viewing ? 'Back to the current position' : 'Show the position before the last move';
 
   const over = $('over');
   over.classList.toggle('hidden', pub.phase !== 'over');

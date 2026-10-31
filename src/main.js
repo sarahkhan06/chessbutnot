@@ -101,25 +101,19 @@ $('challenge').onclick = () => {
   game.challenge();
 };
 
-// ---- rewind ----
-function rewind(to) {
-  const last = game.pub.history.length - 1;
-  const cur = ui.viewPly ?? last;
-  const next = Math.max(0, Math.min(last, typeof to === 'function' ? to(cur) : to));
-  ui.viewPly = next >= last ? null : next;
+// ---- previous position toggle ----
+function togglePrevious() {
+  const h = game.pub.history;
+  if (h.length < 2) return;
+  ui.viewPly = ui.viewPly === null ? h.length - 2 : null;
   clearSelection();
   draw();
 }
-$('rw-first').onclick = () => rewind(0);
-$('rw-prev').onclick = () => rewind((c) => c - 1);
-$('rw-next').onclick = () => rewind((c) => c + 1);
-$('rw-last').onclick = () => rewind(Infinity);
+$('rw-prev').onclick = togglePrevious;
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || $('replay').classList.contains('hidden')) return;
-  if (e.key === 'ArrowLeft') rewind((c) => c - 1);
-  else if (e.key === 'ArrowRight') rewind((c) => c + 1);
-  else if (e.key === 'Home') rewind(0);
-  else if (e.key === 'End') rewind(Infinity);
+  if (e.key === 'ArrowLeft' && ui.viewPly === null) togglePrevious();
+  else if (e.key === 'ArrowRight' && ui.viewPly !== null) togglePrevious();
 });
 
 // ---- misc buttons ----
