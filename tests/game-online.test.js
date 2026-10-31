@@ -9,6 +9,8 @@ function pair() {
   const start = () => { w.readyUp('w'); b.readyUp('b'); flush(); };
   return { w, b, flush, start, queue };
 }
+// White's e-pawn bluffs on its second move (e4 -> e6, a rook slide).
+const bluffE6 = (w, b, flush) => { w.move('e2', 'e4'); flush(); b.move('a7', 'a6'); flush(); w.move('e4', 'e6'); flush(); };
 const tap = (game, wire) => { const orig = game.send; game.send = (m) => { wire.push(m); orig(m); }; };
 
 describe('Game online', () => {
@@ -37,7 +39,7 @@ describe('Game online', () => {
 
   it('bluff challenge over the wire: verdict, penalty, removed; identities only in those messages', () => {
     const { w, b, flush, start } = pair(); const wire = []; tap(w, wire); tap(b, wire); start();
-    w.move('e2', 'e5'); flush(); b.challenge(); expect(b.pub.pending).toBe('awaitVerdict'); flush();
+    bluffE6(w, b, flush); b.challenge(); expect(b.pub.pending).toBe('awaitVerdict'); flush();
     expect(b.pub.lost.w).toEqual([{ id: 'w12', type: 'p', by: null }]); expect(b.pub.pending).toBe('penaltyPick'); expect(w.pub.pending).toBe('penaltyPick');
     b.pickPenalty('w0'); expect(b.pub.pending).toBe('awaitRemoved'); flush();
     expect(b.pub.lost.w).toContainEqual({ id: 'w0', type: 'r', by: null }); expect(w.pub.pieces.w0.square).toBeNull(); expect(b.pub.pending).toBeNull(); expect(w.pub.pending).toBeNull();
@@ -47,7 +49,7 @@ describe('Game online', () => {
 
   it('legal challenge exposes the piece on both sides', () => {
     const { w, b, flush, start } = pair(); start();
-    w.move('b1', 'c3'); flush(); b.challenge(); flush();
+    w.move('b1', 'c3'); flush(); b.move('a7', 'a6'); flush(); w.move('c3', 'd5'); flush(); b.challenge(); flush();
     expect(b.pub.pieces.w1.faceUp).toBe('n'); expect(w.pub.pieces.w1.faceUp).toBe('n'); expect(b.pub.pending).toBeNull();
   });
 
@@ -61,7 +63,7 @@ describe('Game online', () => {
 
   it('bluff onto the king is reverted over the wire; penalty on the king wins for the challenger', () => {
     const { w, b, flush, start } = pair(); b.swap('b', 'e8', 'd7'); w.swap('w', 'e1', 'a1'); start();
-    w.move('d2', 'd7'); flush(); b.challenge(); flush();
+    w.move('d2', 'd4'); flush(); b.move('a7', 'a6'); flush(); w.move('d4', 'd7'); flush(); b.challenge(); flush();
     expect(w.pub.pieces.b11.square).toBe('d7'); expect(b.pub.lost.b).toEqual([]);
     b.pickPenalty('w0'); flush();
     expect(w.pub.phase).toBe('over'); expect(b.pub.phase).toBe('over'); expect(b.pub.winner).toBe('b'); expect(b.pub.reason).toBe('king-penalty');
@@ -89,13 +91,15 @@ describe('Game online', () => {
   it('outstanding() names the unanswered request (Review Focus 5)', () => {
     const { w, b, flush, start } = pair(); start();
     expect(b.outstanding()).toBeNull();
-    w.move('e2', 'e5'); flush(); b.challenge(); expect(b.outstanding()).toEqual({ t: 'challenge' }); flush();
+    bluffE6(w, b, flush); b.challenge(); expect(b.outstanding()).toEqual({ t: 'challenge' }); flush();
     b.pickPenalty('w0'); expect(b.outstanding()).toEqual({ t: 'penalty', id: 'w0' }); flush(); expect(b.outstanding()).toBeNull();
   });
 
   it('re-sent challenge after a verdict is ignored', () => {
     const { w, b, flush, start } = pair(); start();
-    w.move('e2', 'e5'); flush(); b.challenge(); flush();
+    bluffE6(w, b, flush); b.challenge(); flush();
+    expect(w.pub.pending).toBe('penaltyPick');
+    expect(w.receive({ t: 'challenge' })).toBe(false);
   });
 
   it('snapshot/restore round-trips and syncFrom adopts newer public state only', () => {
@@ -125,11 +129,11 @@ describe('Game online', () => {
   describe('reconnect handshake', () => {
     it('a lost verdict leaves the mover strictly newer so hello triggers a sync', () => {
       const { w, b, flush, start, queue } = pair(); start();
-      w.move('e2', 'e5'); flush(); b.challenge(); flush();   // w resolves the bluff
+      bluffE6(w, b, flush); b.challenge(); flush();   // w resolves the bluff
       expect(w.pub.pending).toBe('penaltyPick');
       // Simulate: b never received the verdict.
       const bStale = Game.restore(JSON.parse(JSON.stringify(b.snapshot())), {});
-      bStale.pub.pending = 'awaitVerdict'; bStale.pub.lost.w = []; bStale.pub.pieces.w12.square = 'e5'; bStale.pub.lastMove.challengeable = true;
+      bStale.pub.pending = 'awaitVerdict'; bStale.pub.lost.w = []; bStale.pub.pieces.w12.square = 'e6'; bStale.pub.lastMove.challengeable = true;
       bStale.pub.version = w.pub.version - 1; // what b would have had without the verdict's bumps
       expect(w.onHello(bStale.helloMessage())).toMatchObject({ t: 'sync' });
       expect(bStale.onHello(w.helloMessage())).toBeNull();
@@ -137,7 +141,7 @@ describe('Game online', () => {
     });
     it('setting a pending request does not bump the version', () => {
       const { w, b, flush, start } = pair(); start();
-      w.move('e2', 'e5'); flush(); const v = b.pub.version; b.challenge();
+      bluffE6(w, b, flush); const v = b.pub.version; b.challenge();
       expect(b.pub.pending).toBe('awaitVerdict'); expect(b.pub.version).toBe(v);
     });
     it('a lost ready is recovered from the hello message', () => {

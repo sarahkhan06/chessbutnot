@@ -3,6 +3,8 @@ import { Game } from '../src/game.js';
 
 const g = (setup = () => {}) => { const game = new Game(); setup(game); game.readyUp('w'); game.readyUp('b'); return game; };
 const kingOnD7 = (game) => game.swap('b', 'e8', 'd7'); // black king (b4) now sits on d7 slot => id b11 is the king
+// e-pawn's second move slides two squares like a rook: a bluff that can be challenged.
+const bluffE6 = (game) => { game.move('e2', 'e4'); game.move('a7', 'a6'); game.move('e4', 'e6'); };
 const walkToD7 = (game) => { for (const [f, t] of [['e2','e4'],['a7','a6'],['e4','e5'],['a6','a5'],['e5','e6'],['a5','a4'],['e6','d7']]) game.move(f, t); };
 
 describe('Game hot-seat', () => {
@@ -18,28 +20,28 @@ describe('Game hot-seat', () => {
     game.lockIn('w'); game.swap('w', 'e1', 'e2'); expect(game.priv.w.w4).toBe('k');
   });
   it('legal move then opponent moves: previous move becomes unchallengeable', () => {
-    const game = g(); game.move('e2', 'e4'); expect(game.canChallenge()).toBe(true);
-    game.move('e7', 'e5'); expect(game.pub.lastMove.from).toBe('e7'); expect(game.pub.pieces.w12.square).toBe('e4');
+    const game = g(); game.move('e2', 'e4'); game.move('a7', 'a6'); game.move('e4', 'e5'); expect(game.canChallenge()).toBe(true);
+    game.move('e7', 'e6'); expect(game.pub.lastMove.from).toBe('e7'); expect(game.pub.pieces.w12.square).toBe('e5');
   });
   it('challenging a legal move exposes it face-up and the challenger still moves', () => {
-    const game = g(); game.move('b1', 'c3'); game.challenge();
+    const game = g(); game.move('b1', 'c3'); game.move('a7', 'a6'); game.move('c3', 'd5'); game.challenge();
     expect(game.pub.pieces.w1.faceUp).toBe('n'); expect(game.pub.turn).toBe('b'); expect(game.pub.pending).toBeNull(); expect(game.canChallenge()).toBe(false);
     game.move('e7', 'e5'); expect(game.pub.turn).toBe('w');
   });
   it('challenging a bluff removes it, enters penalty pick, penalty removes and reveals', () => {
-    const game = g(); game.move('e2', 'e5'); /* pawn sliding like a rook */ game.challenge();
+    const game = g(); bluffE6(game); game.challenge();
     expect(game.pub.lost.w).toEqual([{ id: 'w12', type: 'p', by: null }]); expect(game.pub.pending).toBe('penaltyPick');
     expect(game.destinations('e7')).toEqual([]);
     game.move('e7', 'e5'); expect(game.pub.pieces.b12.square).toBe('e7');
     game.pickPenalty('w4'); expect(game.pub.phase).toBe('over'); expect(game.pub.winner).toBe('b'); expect(game.pub.reason).toBe('king-penalty');
   });
   it('penalty on a non-king piece lets the challenger move on', () => {
-    const game = g(); game.move('e2', 'e5'); game.challenge(); game.pickPenalty('w0');
+    const game = g(); bluffE6(game); game.challenge(); game.pickPenalty('w0');
     expect(game.pub.lost.w).toContainEqual({ id: 'w0', type: 'r', by: null }); expect(game.pub.pending).toBeNull(); expect(game.pub.turn).toBe('b');
     game.move('e7', 'e5'); expect(game.pub.turn).toBe('w');
   });
   it('pickPenalty ignores own pieces and already-removed pieces', () => {
-    const game = g(); game.move('e2', 'e5'); game.challenge();
+    const game = g(); bluffE6(game); game.challenge();
     game.pickPenalty('b4'); expect(game.pub.pending).toBe('penaltyPick');
     game.pickPenalty('w12'); expect(game.pub.pending).toBe('penaltyPick');
   });
@@ -59,7 +61,7 @@ describe('Game hot-seat', () => {
     expect(game.priv.w.w15).toBe('q');
   });
   it('king capture only wins when accepted; a bluff onto the king is punishable', () => {
-    const game = g(kingOnD7); game.move('d2', 'd7'); /* pawn sliding like a rook onto the king */
+    const game = g(kingOnD7); game.move('d2', 'd4'); game.move('a7', 'a6'); game.move('d4', 'd7'); /* pawn sliding like a rook onto the king */
     expect(game.pub.phase).toBe('play'); expect(game.pub.lost.b).toEqual([{ id: 'b11', type: null, by: 'w11' }]);
     game.challenge();
     expect(game.pub.pieces.b11.square).toBe('d7'); expect(game.pub.lost.b).toEqual([]); expect(game.pub.pending).toBe('penaltyPick');
@@ -75,12 +77,12 @@ describe('Game hot-seat', () => {
     expect(game.pub.phase).toBe('over'); expect(game.pub.winner).toBe('w'); expect(game.pub.pieces.w12.faceUp).toBe('p');
   });
   it('a bluffing king caught by challenge loses outright', () => {
-    const game = g((x) => x.swap('w', 'e1', 'e2')); game.move('e2', 'e5'); game.challenge();
+    const game = g((x) => x.swap('w', 'e1', 'e2')); game.move('e2', 'e3'); game.move('a7', 'a6'); game.move('e3', 'e6'); game.challenge();
     expect(game.pub.phase).toBe('over'); expect(game.pub.winner).toBe('b'); expect(game.pub.reason).toBe('king-bluffed');
   });
   it('moves during setup or after game over are ignored', () => {
     const game = new Game(); game.move('e2', 'e4'); expect(game.pub.pieces.w12.square).toBe('e2');
-    const over = g((x) => x.swap('w', 'e1', 'e2')); over.move('e2', 'e5'); over.challenge(); expect(over.pub.phase).toBe('over'); over.move('e7', 'e5'); expect(over.pub.pieces.b12.square).toBe('e7');
+    const over = g((x) => x.swap('w', 'e1', 'e2')); over.move('e2', 'e3'); over.move('a7', 'a6'); over.move('e3', 'e6'); over.challenge(); expect(over.pub.phase).toBe('over'); over.move('e7', 'e5'); expect(over.pub.pieces.b12.square).toBe('e7');
   });
   it('destinations is empty for the non-viewer piece and marks legal vs bluff', () => {
     const game = g(); expect(game.destinations('e7')).toEqual([]);

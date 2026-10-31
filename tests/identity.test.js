@@ -45,7 +45,8 @@ describe('identity', () => {
     const d = legalDestinations(S(), standardIdentity('w'), 'b1');
     expect(d.find((x) => x.to === 'c3').legal).toBe(true);
     expect(d.find((x) => x.to === 'b3')).toBeUndefined();
-    const d2 = legalDestinations(S(), standardIdentity('w'), 'e2');
-    expect(d2.find((x) => x.to === 'e4').legal).toBe(true); expect(d2.find((x) => x.to === 'f3').legal).toBe(false);
+    let s = applyMove(S(), 'e2', 'e4'); s = applyMove(s, 'a7', 'a6');
+    const d2 = legalDestinations(s, standardIdentity('w'), 'e4');
+    expect(d2.find((x) => x.to === 'e5').legal).toBe(true); expect(d2.find((x) => x.to === 'e6').legal).toBe(false);
   });
 });

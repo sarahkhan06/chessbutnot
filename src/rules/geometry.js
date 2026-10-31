@@ -5,7 +5,7 @@ export const FILES = 'abcdefgh';
 export const sq = (file, rank) => (file < 0 || file > 7 || rank < 1 || rank > 8 ? null : FILES[file] + rank);
 export const fileOf = (s) => FILES.indexOf(s[0]);
 export const rankOf = (s) => Number(s[1]);
-export const startRanks = (color) => (color === 'w' ? [1, 2] : [8, 7]);
+export const pawnRank = (color) => (color === 'w' ? 2 : 7);
 
 const ORTHO = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const DIAG = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -40,7 +40,7 @@ function pawn(color, from, occ, hasMoved) {
   if (one && occ(one) === null) {
     out.push(one);
     const two = sq(f0, r0 + 2 * dir);
-    if (!hasMoved && startRanks(color).includes(r0) && two && occ(two) === null) out.push(two);
+    if (!hasMoved && r0 === pawnRank(color) && two && occ(two) === null) out.push(two);
   }
   for (const df of [-1, 1]) {
     const d = sq(f0 + df, r0 + dir);

@@ -69,7 +69,8 @@ export class Game {
     return legalDestinations(this.pub, this.priv[this.viewer()], from);
   }
 
-  canChallenge() { return this.canAct() && !!this.pub.lastMove?.challengeable; }
+  // A piece's first move is always honest, so it cannot be challenged.
+  canChallenge() { return this.canAct() && !!this.pub.lastMove?.challengeable && this.pub.lastMove.moverMoved; }
 
   // ---- play: local actions ----
   move(from, to) {
@@ -201,7 +202,7 @@ export class Game {
       }
       case 'challenge': {
         const lm = pub.lastMove;
-        if (pub.phase !== 'play' || pub.pending !== null || !lm?.challengeable || pub.turn !== opp) return false;
+        if (pub.phase !== 'play' || pub.pending !== null || !lm?.challengeable || !lm.moverMoved || pub.turn !== opp) return false;
         if (pub.pieces[lm.pieceId].color !== this.me) return false;
         this.answerChallenge();
         return true;

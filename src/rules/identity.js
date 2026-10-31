@@ -47,5 +47,8 @@ export function legalDestinations(state, identity, from) {
   if (!id) return [];
   const p = state.pieces[id];
   const type = identity[id];
-  return destinations(p.color, from, occupancy(state, p.color), p.moved).map(({ to, types }) => ({ to, legal: types.includes(type) }));
+  // A piece's first move must be honest; bluffing opens up from its second move on.
+  return destinations(p.color, from, occupancy(state, p.color), p.moved)
+    .map(({ to, types }) => ({ to, legal: types.includes(type) }))
+    .filter((d) => p.moved || d.legal);
 }

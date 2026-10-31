@@ -103,7 +103,7 @@ export function render(game, ui, onClick) {
     else if (online) {
       const theirs = pub.turn !== me;
       status = `You are ${name(me)} — ${theirs ? `waiting for ${name(pub.turn)}` : 'your move'}`;
-      if (theirs && pub.lastMove?.challengeable) status += ' (they may challenge)';
+      if (theirs && pub.lastMove?.challengeable && pub.lastMove.moverMoved) status += ' (they may challenge)';
     } else status = `${name(pub.turn)} to move`;
   } else status = overTitle(pub);
   $('status').textContent = status;
@@ -115,8 +115,11 @@ export function render(game, ui, onClick) {
   } else conn.className = 'conn hidden';
 
   const ch = $('challenge');
-  ch.classList.toggle('hidden', !game.canChallenge() || game.lostState);
-  ch.textContent = ui.confirmChallenge ? 'Challenge — sure?' : 'Challenge last move';
+  // The opponent's piece just made its first move: always honest, so the button is shown disabled with the reason.
+  const debut = game.canAct() && !!pub.lastMove?.challengeable && !pub.lastMove.moverMoved;
+  ch.classList.toggle('hidden', (!game.canChallenge() && !debut) || game.lostState);
+  ch.disabled = debut;
+  ch.textContent = debut ? 'First move — always honest' : ui.confirmChallenge ? 'Challenge — sure?' : 'Challenge last move';
   if (ui.confirmChallenge) ch.dataset.confirm = '1'; else delete ch.dataset.confirm;
   $('mirror').style.display = !online && play ? '' : 'none';
   $('online').style.display = online ? 'none' : '';

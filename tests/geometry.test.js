@@ -15,15 +15,15 @@ describe('patternMoves', () => {
     expect(patternMoves('b', 'w', 'd4', occ, true).length).toBe(13);
     expect(patternMoves('q', 'w', 'd4', occ, true).length).toBe(27);
   });
-  it('white pawn on rank 1 double-steps if unmoved', () => {
-    expect(patternMoves('p', 'w', 'e1', () => null, false).sort()).toEqual(['e2', 'e3']);
+  it('white pawn on rank 2 double-steps if unmoved', () => {
+    expect(patternMoves('p', 'w', 'e2', () => null, false).sort()).toEqual(['e3', 'e4']);
   });
   it('black pawn on rank 7 double-steps toward rank 5', () => {
     expect(patternMoves('p', 'b', 'e7', () => null, false).sort()).toEqual(['e5', 'e6']);
   });
   it('pawn double step blocked by a piece on either square (Review Focus 3)', () => {
-    expect(patternMoves('p', 'w', 'e1', occFrom({ e2: 'own' }), false)).toEqual([]);
-    expect(patternMoves('p', 'w', 'e1', occFrom({ e3: 'enemy' }), false)).toEqual(['e2']);
+    expect(patternMoves('p', 'w', 'e2', occFrom({ e3: 'own' }), false)).toEqual([]);
+    expect(patternMoves('p', 'w', 'e2', occFrom({ e4: 'enemy' }), false)).toEqual(['e3']);
   });
   it('pawn captures diagonally only onto enemy, never forward onto a piece', () => {
     const occ = occFrom({ d5: 'enemy', f5: 'own', e5: 'enemy' });
@@ -40,7 +40,7 @@ describe('destinations', () => {
     const d = destinations('w', 'e1', () => null, false);
     const at = (s) => d.find((x) => x.to === s)?.types;
     expect(at('e2')).toEqual(['k', 'q', 'r', 'p']);
-    expect(at('e3')).toEqual(['q', 'r', 'p']);
+    expect(at('e3')).toEqual(['q', 'r']);
     expect(at('f3')).toEqual(['n']);
     expect(at('h4')).toEqual(['q', 'b']);
   });
