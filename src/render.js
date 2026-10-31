@@ -2,7 +2,7 @@
 import { pieceAt } from './rules/state.js';
 import { FILES } from './rules/geometry.js';
 
-export const GLYPH = { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕', k: '♔' };
+export const GLYPH = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
 export const name = (c) => (c === 'w' ? 'White' : 'Black');
 const other = (c) => (c === 'w' ? 'b' : 'w');
 const $ = (id) => document.getElementById(id);
@@ -52,6 +52,9 @@ export function render(game, ui, onClick) {
       if (sqName === ui.selected) el.classList.add('sel');
       if (destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');
       const id = pieceAt(pub, sqName);
+      if (id) el.classList.add('occ');
+      if (ri === 7) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = FILES[file]; el.appendChild(c); }
+      if (fi === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank; el.appendChild(c); }
       if (editable && id && pub.pieces[id].color === v) el.classList.add('edit');
       if (id) {
         const p = pub.pieces[id];
@@ -74,8 +77,8 @@ export function render(game, ui, onClick) {
     const t = $(elId); t.innerHTML = '';
     for (const e of pub.lost[color]) {
       const s = document.createElement('span');
-      if (e.type) s.textContent = GLYPH[e.type]; else { s.textContent = '?'; s.className = 'pending'; }
-      if (color === 'b') s.classList.add('b');
+      s.className = color === v ? 'own' : 'foe';
+      if (e.type) s.textContent = GLYPH[e.type]; else { s.textContent = '?'; s.classList.add('pending'); }
       t.appendChild(s);
     }
   };
