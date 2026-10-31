@@ -40,9 +40,9 @@ describe('state reducers', () => {
     expect(s.lost.b[0].type).toBe('k'); expect(s.phase).toBe('over'); expect(s.winner).toBe('w'); expect(s.reason).toBe('king-captured');
     expect(revealLost(capturePos(), 'b11', 'p').phase).toBe('play');
   });
-  it('resolveLegal turns the piece face-up and ends challengeability', () => {
-    const s = resolveLegal(applyMove(createState(), 'b1', 'c3'), 'n');
-    expect(s.pieces.w1.faceUp).toBe('n'); expect(s.lastMove.challengeable).toBe(false);
+  it('resolveLegal keeps the piece hidden and ends challengeability', () => {
+    const s = resolveLegal(applyMove(createState(), 'b1', 'c3'));
+    expect(s.pieces.w1.faceUp).toBeNull(); expect(s.lastMove.challengeable).toBe(false);
   });
   it('resolveBluff removes the bluffer, restores a captured piece hidden, enters penaltyPick', () => {
     const s = resolveBluff(capturePos(), 'n');

@@ -23,9 +23,9 @@ describe('Game hot-seat', () => {
     const game = g(); game.move('e2', 'e4'); game.move('a7', 'a6'); game.move('e4', 'e5'); expect(game.canChallenge()).toBe(true);
     game.move('e7', 'e6'); expect(game.pub.lastMove.from).toBe('e7'); expect(game.pub.pieces.w12.square).toBe('e5');
   });
-  it('challenging a legal move exposes it face-up and the challenger still moves', () => {
+  it('challenging a legal move does NOT reveal the piece, and the challenger still moves', () => {
     const game = g(); game.move('b1', 'c3'); game.move('a7', 'a6'); game.move('c3', 'd5'); game.challenge();
-    expect(game.pub.pieces.w1.faceUp).toBe('n'); expect(game.pub.turn).toBe('b'); expect(game.pub.pending).toBe('penaltyPick'); expect(game.canChallenge()).toBe(false);
+    expect(game.pub.pieces.w1.faceUp).toBeNull(); expect(game.pub.history.at(-1)).toMatchObject({ kind: 'legal' }); expect('type' in game.pub.history.at(-1)).toBe(false); expect(game.pub.turn).toBe('b'); expect(game.pub.pending).toBe('penaltyPick'); expect(game.canChallenge()).toBe(false);
     game.pickPenalty('b0'); expect(game.pub.pending).toBeNull();
     game.move('e7', 'e5'); expect(game.pub.turn).toBe('w');
   });
@@ -75,7 +75,7 @@ describe('Game hot-seat', () => {
   });
   it('challenging a legal king capture reveals the king and ends the game', () => {
     const game = g(kingOnD7); walkToD7(game); game.challenge();
-    expect(game.pub.phase).toBe('over'); expect(game.pub.winner).toBe('w'); expect(game.pub.pieces.w12.faceUp).toBe('p');
+    expect(game.pub.phase).toBe('over'); expect(game.pub.winner).toBe('w'); expect(game.pub.pieces.w12.faceUp).toBeNull(); expect(game.pub.lost.b[0].type).toBe('k');
   });
   it('a bluffing king caught by challenge loses outright', () => {
     const game = g((x) => x.swap('w', 'e1', 'e2')); game.move('e2', 'e3'); game.move('a7', 'a6'); game.move('e3', 'e6'); game.challenge();

@@ -47,10 +47,12 @@ describe('Game online', () => {
     b.move('e7', 'e5'); flush(); expect(w.pub.turn).toBe('w');
   });
 
-  it('legal challenge exposes the piece on both sides', () => {
-    const { w, b, flush, start } = pair(); start();
+  it('a wrong (legal) challenge keeps the piece hidden on both sides and the verdict carries no identity', () => {
+    const { w, b, flush, start } = pair(); const wire = []; tap(w, wire); tap(b, wire); start();
     w.move('b1', 'c3'); flush(); b.move('a7', 'a6'); flush(); w.move('c3', 'd5'); flush(); b.challenge(); flush();
-    expect(b.pub.pieces.w1.faceUp).toBe('n'); expect(w.pub.pieces.w1.faceUp).toBe('n');
+    expect(b.pub.pieces.w1.faceUp).toBeNull(); expect(w.pub.pieces.w1.faceUp).toBeNull();
+    const verdict = wire.find((m) => m.t === 'verdict'); expect(verdict).toEqual({ t: 'verdict', legal: true });
+    expect(b.receive({ t: 'verdict', legal: true, type: 'n' })).toBe(false); // nothing pending any more
     expect(b.pub.pending).toBe('penaltyPick'); expect(b.pub.picker).toBe('w'); // wrong challenge: the mover picks a penalty
   });
 

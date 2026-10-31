@@ -8,13 +8,16 @@ import { pieceAt } from './rules/state.js';
 const $ = (id) => document.getElementById(id);
 
 let game, net = null, room = null, me = null, confirmTimer = null;
-const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false, viewPly: null };
+const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false, viewPly: null, showStart: false, overSeen: false };
 let chat = [];
 
 // ---- rendering and persistence ----
 function draw() { render(game, ui, click); }
 function onChange() {
   ui.viewPly = null; // any new event snaps the view back to live
+  // When a game ends, open on the starting arrangements; the toggle flips back to the final position.
+  if (game.pub.phase === 'over') { if (!ui.overSeen) { ui.overSeen = true; ui.showStart = true; } }
+  else { ui.overSeen = false; ui.showStart = false; }
   if (room && me) saveGame(room, me, game.snapshot());
   draw();
 }
@@ -130,6 +133,7 @@ const restart = () => {
   game.newGame();
 };
 $('new').onclick = restart;
+$('over-toggle').onclick = () => { ui.showStart = !ui.showStart; draw(); };
 $('over-btn').onclick = restart;
 $('copy').onclick = () => { $('link').select(); navigator.clipboard?.writeText($('link').value); $('copy').textContent = 'Copied!'; };
 
@@ -162,8 +166,8 @@ function onStatus(status, detail) { ui.connection = { status, detail }; draw(); 
 function onOpen() { send(game.helloMessage()); }
 function resendOutstanding() { const o = game.outstanding(); if (o) send(o); }
 function onMessage(m) {
-  if (m.t === 'hello') { const sync = game.onHello(m); if (sync) send(sync); resendOutstanding(); }
-  else if (m.t === 'sync') { game.syncFrom(m.pub); resendOutstanding(); }
+  if (m.t === 'hello') { const sync = game.onHello(m); if (sync) send(sync); resendOutstanding(); game.shareSetup(true); }
+  else if (m.t === 'sync') { game.syncFrom(m.pub); resendOutstanding(); game.shareSetup(true); }
   else if (m.t === 'chat') { if (isChatMessage(m, me)) addChat(m); }
   else game.receive(m);
 }

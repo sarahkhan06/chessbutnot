@@ -5,7 +5,7 @@ import {
   revealLost, resolveLegal, resolveBluff, applyPenalty,
 } from './rules/state.js';
 import { TYPES, destinations } from './rules/geometry.js';
-import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, legalDestinations } from './rules/identity.js';
+import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, legalDestinations, isValidIdentity } from './rules/identity.js';
 
 const other = (c) => (c === 'w' ? 'b' : 'w');
 
@@ -24,13 +24,37 @@ export class Game {
     this.setupColor = 'w';
     this.lastMoverType = null; // identity of the last moved piece *before* promotion, if we own it
     this.lostState = false;    // set when a sync shows the other side thinks we are in a game we never arranged
+    this.initial = structuredClone(this.priv); // identities as arranged in setup, kept for the end-of-game reveal
+    this.setups = { w: null, b: null };        // the other player's arrangement, received once the game is over
+    this.setupShared = false;
   }
 
   owns(color) { return this.me === null || this.me === color; }
   // Hot-seat: whoever is picking a penalty holds the screen; otherwise the side to move.
   viewer() { return this.me ?? (this.pub.phase === 'setup' ? this.setupColor : (this.pub.pending === 'penaltyPick' && this.pub.picker) || this.pub.turn); }
   isGameOver() { return this.pub.phase === 'over'; }
-  changed() { this.onChange(); }
+  changed() {
+    if (this.pub.phase === 'setup') this.initial = structuredClone(this.priv);
+    else if (this.pub.phase === 'over') this.shareSetup();
+    this.onChange();
+  }
+
+  // ---- end-of-game reveal: both starting arrangements ----
+  // Send our own arrangement once the game is over (re-sent on reconnect with force).
+  shareSetup(force = false) {
+    if (!this.me || this.pub.phase !== 'over' || (this.setupShared && !force)) return;
+    const ids = this.initial?.[this.me];
+    if (!ids) return;
+    this.setupShared = true;
+    this.send({ t: 'setup', gen: this.pub.gen, ids });
+  }
+
+  // Each side's arrangement from before move one, or null if not known (yet).
+  startingSetup() {
+    const out = {};
+    for (const c of ['w', 'b']) out[c] = (this.owns(c) ? this.initial?.[c] : this.setups[c]) ?? null;
+    return out;
+  }
 
   // ---- setup ----
   swap(color, sqA, sqB) {
@@ -128,9 +152,9 @@ export class Game {
     // already been promoted privately); reveal its current identity if legal.
     const movedAs = this.lastMoverType ?? this.priv[mover][pieceId];
     if (isLastMoveLegal(this.pub, { ...this.priv[mover], [pieceId]: movedAs })) {
-      const type = this.priv[mover][pieceId];
-      this.pub = resolveLegal(this.pub, type);
-      this.send({ t: 'verdict', legal: true, type });
+      // Legal: say so, but keep the piece's identity to ourselves.
+      this.pub = resolveLegal(this.pub);
+      this.send({ t: 'verdict', legal: true });
       if (capturedId) this.acceptCapture();
     } else {
       this.pub = resolveBluff(this.pub, movedAs);
@@ -209,9 +233,10 @@ export class Game {
         return true;
       }
       case 'verdict': {
-        if (pub.phase !== 'play' || pub.pending !== 'awaitVerdict' || !TYPES.includes(msg.type)) return false;
+        if (pub.phase !== 'play' || pub.pending !== 'awaitVerdict') return false;
+        if (!msg.legal && !TYPES.includes(msg.type)) return false;
         if (msg.legal) {
-          this.pub = resolveLegal(pub, msg.type); // leaves pending = 'penaltyPick' for the mover's pick
+          this.pub = resolveLegal(pub); // leaves pending = 'penaltyPick' for the mover's pick
           if (this.pub.lastMove.capturedId) this.acceptCapture();
         } else {
           this.pub = resolveBluff(pub, msg.type);
@@ -230,6 +255,12 @@ export class Game {
       case 'removed': {
         if (pub.phase !== 'play' || pub.pending !== 'awaitRemoved' || pub.penaltyId !== msg.id || !TYPES.includes(msg.type)) return false;
         this.pub = applyPenalty(pub, msg.id, msg.type);
+        return true;
+      }
+      case 'setup': {
+        if (msg.gen !== undefined && msg.gen !== pub.gen) return false;
+        if (!isValidIdentity(msg.ids, opp)) return false;
+        this.setups[opp] = { ...msg.ids };
         return true;
       }
       case 'new': {
@@ -267,7 +298,7 @@ export class Game {
   }
 
   // ---- persistence and sync ----
-  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor, lastMoverType: this.lastMoverType }; }
+  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor, lastMoverType: this.lastMoverType, initial: this.initial, setups: this.setups }; }
 
   static isSnapshot(data) {
     if (!data || typeof data !== 'object') return false;
@@ -282,6 +313,8 @@ export class Game {
     const g = new Game({ me: data.me, send, onChange });
     g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] };
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
+    g.initial = data.initial ?? (g.pub.phase === 'setup' ? structuredClone(g.priv) : null);
+    g.setups = data.setups ?? { w: null, b: null };
     return g;
   }
 

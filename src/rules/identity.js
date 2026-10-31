@@ -10,6 +10,14 @@ export function standardIdentity(color) {
   return out;
 }
 
+// Shape check for an identity map received from the other player (16 pieces, standard composition).
+export function isValidIdentity(ids, color) {
+  if (!ids || typeof ids !== 'object' || Array.isArray(ids)) return false;
+  for (let i = 0; i < 16; i++) if (typeof ids[`${color}${i}`] !== 'string') return false;
+  const vals = Object.keys(ids).map((k) => ids[k]);
+  return vals.length === 16 && vals.slice().sort().join('') === [...STANDARD].sort().join('');
+}
+
 export function swapIdentity(identity, idA, idB) {
   return { ...identity, [idA]: identity[idB], [idB]: identity[idA] };
 }

@@ -23,10 +23,10 @@ describe('wrong challenge penalty', () => {
     const done = applyPenalty(legal, 'b0', 'r');
     expect(done.pending).toBeNull(); expect(done.picker).toBeNull(); expect(done.turn).toBe('b');
   });
-  it('hot-seat: a wrong challenge lets the mover remove one of the challenger\'s pieces, then the challenger moves', () => {
+  it('hot-seat: a wrong challenge keeps the piece hidden and lets the mover remove one of the challenger\'s pieces, then the challenger moves', () => {
     const g = new Game(); g.readyUp('w'); g.readyUp('b'); legalKnight(g);
     g.challenge();
-    expect(g.pub.pieces.w1.faceUp).toBe('n'); expect(g.pub.pending).toBe('penaltyPick'); expect(g.viewer()).toBe('w');
+    expect(g.pub.pieces.w1.faceUp).toBeNull(); expect(g.pub.pending).toBe('penaltyPick'); expect(g.viewer()).toBe('w');
     g.move('e7', 'e5'); expect(g.pub.pieces.b12.square).toBe('e7'); // nobody moves during the pick
     g.pickPenalty('w0'); expect(g.pub.pending).toBe('penaltyPick');  // cannot pick own piece
     g.pickPenalty('b0');

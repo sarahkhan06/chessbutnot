@@ -23,11 +23,11 @@ describe('promotion vs challenge (review fix 1)', () => {
     expect(g.pub.lost.w).toContainEqual({ id: 'w8', type: 'p', by: null });
     expect(g.pub.pieces.b1.square).toBe('b8'); expect(g.pub.pending).toBe('penaltyPick');
   });
-  it('a legal promotion that is challenged exposes the piece as the queen it now is', () => {
+  it('a legal promotion that is challenged is judged as a queen but stays hidden', () => {
     const g = hotseat();
     for (const [f, t] of [['h2','h4'],['a7','a5'],['h4','h5'],['a5','a4'],['h5','h6'],['a4','a3'],['h6','g7'],['b7','b6'],['g7','h8']]) g.move(f, t);
     g.challenge();
-    expect(g.pub.pieces.w15.faceUp).toBe('q'); expect(g.pub.pending).toBe('penaltyPick'); expect(g.pub.picker).toBe('w'); expect(g.priv.w.w15).toBe('q');
+    expect(g.pub.pieces.w15.faceUp).toBeNull(); expect(g.pub.pending).toBe('penaltyPick'); expect(g.pub.picker).toBe('w'); expect(g.priv.w.w15).toBe('q');
   });
   it('the pre-move type survives snapshot/restore for the pending challenge', () => {
     const { w, b, flush, start } = pair(); start();

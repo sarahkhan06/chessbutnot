@@ -1,5 +1,5 @@
 // DOM rendering. Reads a Game and a small ui object; never mutates game state.
-import { pieceAt } from './rules/state.js';
+import { pieceAt, startSquare } from './rules/state.js';
 import { FILES } from './rules/geometry.js';
 
 export const GLYPH = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
@@ -11,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 export function historyLabel(e, i) {
   if (!e || e.kind === 'start') return 'Start';
   if (e.kind === 'move') return `${e.from}${e.capture ? '×' : '–'}${e.to}`;
-  if (e.kind === 'legal') return `Challenged: legal, ${GLYPH[e.type]} exposed`;
+  if (e.kind === 'legal') return 'Challenged: legal — piece stays hidden';
   if (e.kind === 'bluff') return `Bluff caught: ${GLYPH[e.type]} removed`;
   if (e.kind === 'penalty') return `Penalty: ${GLYPH[e.type]} taken on ${e.to}`;
   return '';
@@ -50,13 +50,17 @@ export function render(game, ui, onClick) {
 
   // Rewind: show the board as it was after history entry ui.viewPly instead of the live position.
   const hist = pub.history || [];
-  const viewing = ui.viewPly != null && ui.viewPly < hist.length - 1;
+  // Game over: show both starting arrangements, every card face-up, until toggled back.
+  const showingStart = pub.phase === 'over' && !!ui.showStart;
+  const setups = showingStart ? game.startingSetup() : null;
+  const viewing = !showingStart && ui.viewPly != null && ui.viewPly < hist.length - 1;
   const entry = viewing ? hist[ui.viewPly] : null;
   const bySquare = {};
-  if (entry) for (const id in entry.board) bySquare[entry.board[id]] = id;
-  const at = (s) => (viewing ? bySquare[s] ?? null : pieceAt(pub, s));
+  if (showingStart) for (const id in pub.pieces) bySquare[startSquare(id)] = id;
+  else if (entry) for (const id in entry.board) bySquare[entry.board[id]] = id;
+  const at = (s) => (showingStart || viewing ? bySquare[s] ?? null : pieceAt(pub, s));
   const faceUpOf = (id) => (viewing ? entry.faceUp?.[id] ?? null : pub.pieces[id].faceUp);
-  const hl = viewing ? entry : pub.lastMove;
+  const hl = showingStart ? null : viewing ? entry : pub.lastMove;
 
   const board = $('board');
   board.innerHTML = '';
@@ -80,8 +84,17 @@ export function render(game, ui, onClick) {
       if (id) {
         const p = pub.pieces[id];
         const own = p.color === v;
-        const fu = faceUpOf(id);
+        const fu = showingStart ? null : faceUpOf(id);
         const c = document.createElement('div');
+        if (showingStart) {
+          const t = setups[p.color]?.[id];
+          c.className = 'card start ' + p.color;
+          c.textContent = t ? GLYPH[t] : '?';
+          el.appendChild(c);
+          el.onclick = () => onClick(sqName);
+          board.appendChild(el);
+          continue;
+        }
         c.className = 'card ' + (own ? 'own' : 'foe');
         if (own) c.textContent = GLYPH[game.priv[v][id]];
         else if (fu) c.textContent = GLYPH[fu];
@@ -131,7 +144,7 @@ export function render(game, ui, onClick) {
       status = `You are ${name(me)} — ${theirs ? `waiting for ${name(pub.turn)}` : 'your move'}`;
       if (theirs && pub.lastMove?.challengeable && pub.lastMove.moverMoved) status += ' (they may challenge)';
     } else status = `${name(pub.turn)} to move`;
-  } else status = overTitle(pub);
+  } else status = overTitle(pub) + (showingStart ? ' — starting setups revealed' : '');
   $('status').textContent = status;
 
   const conn = $('conn');
@@ -152,7 +165,7 @@ export function render(game, ui, onClick) {
   $('bluff-hint').classList.toggle('hidden', !ui.showBluffHint);
 
   const rp = $('replay');
-  rp.classList.toggle('hidden', !(play || pub.phase === 'over') || hist.length < 2);
+  rp.classList.toggle('hidden', !(play || pub.phase === 'over') || hist.length < 2 || showingStart);
   rp.classList.toggle('reviewing', viewing);
   const last = hist[hist.length - 1];
   const label = historyLabel(last);
@@ -162,5 +175,10 @@ export function render(game, ui, onClick) {
 
   const over = $('over');
   over.classList.toggle('hidden', pub.phase !== 'over');
-  if (pub.phase === 'over') $('over-title').textContent = overTitle(pub);
+  if (pub.phase === 'over') {
+    $('over-title').textContent = overTitle(pub);
+    $('over-toggle').textContent = showingStart ? 'Show final position' : 'Show starting setups';
+    const missing = showingStart && (!setups.w || !setups.b);
+    $('over-note').textContent = showingStart ? (missing ? 'Waiting for the other player’s starting setup…' : 'Showing how each side arranged its pieces before move one.') : '';
+  }
 }

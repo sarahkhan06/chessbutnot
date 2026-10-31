@@ -27,8 +27,8 @@ describe('move history (previous position only)', () => {
     expect(bluff.history.at(-1).board).toMatchObject({ b11: 'd5' }); expect('w12' in bluff.history.at(-1).board).toBe(false);
     const pen = applyPenalty(bluff, 'w0', 'r');
     expect(pen.history.at(-1)).toMatchObject({ kind: 'penalty', type: 'r' }); expect('w0' in pen.history.at(-1).board).toBe(false);
-    const legal = resolveLegal(s, 'p');
-    expect(legal.history.at(-1)).toMatchObject({ kind: 'legal', type: 'p', to: 'd5', faceUp: { w12: 'p' } });
+    const legal = resolveLegal(s);
+    expect(legal.history.at(-1)).toMatchObject({ kind: 'legal', to: 'd5' }); expect('type' in legal.history.at(-1)).toBe(false); expect(legal.history.at(-1).faceUp.w12).toBeUndefined();
   });
   it('restore defaults history for saves made before it existed', () => {
     const g = new Game({ me: 'w' }); const snap = JSON.parse(JSON.stringify(g.snapshot())); delete snap.pub.history;

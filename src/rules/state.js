@@ -18,12 +18,18 @@ function boardOf(s) {
 }
 const record = (s, entry) => { s.history = [...s.history, { ...entry, ...boardOf(s) }].slice(-2); return s; };
 
+// Where piece `id` (e.g. 'w12') stands before the first move.
+export function startSquare(id) {
+  const color = id[0], i = Number(id.slice(1));
+  const back = color === 'w' ? 1 : 8, front = color === 'w' ? 2 : 7;
+  return FILES[i % 8] + (i < 8 ? back : front);
+}
+
 export function createState() {
   const pieces = {};
   for (const color of ['w', 'b']) {
-    const back = color === 'w' ? 1 : 8, front = color === 'w' ? 2 : 7;
     for (let i = 0; i < 16; i++) {
-      pieces[`${color}${i}`] = { color, square: FILES[i % 8] + (i < 8 ? back : front), faceUp: null, moved: false };
+      pieces[`${color}${i}`] = { color, square: startSquare(`${color}${i}`), faceUp: null, moved: false };
     }
   }
   return {
@@ -94,13 +100,13 @@ export function revealLost(state, id, type) {
   return bump(s);
 }
 
-export function resolveLegal(state, type) {
+// A wrong challenge only proves the move was legal for the piece: its identity stays hidden.
+export function resolveLegal(state) {
   const s = clone(state);
-  s.pieces[s.lastMove.pieceId].faceUp = type;
   s.lastMove.challengeable = false;
   // Wrong challenge: the mover removes one of the challenger's pieces.
   s.pending = 'penaltyPick'; s.picker = s.pieces[s.lastMove.pieceId].color;
-  return bump(record(s, { kind: 'legal', type, from: s.lastMove.from, to: s.lastMove.to }));
+  return bump(record(s, { kind: 'legal', from: s.lastMove.from, to: s.lastMove.to }));
 }
 
 export function resolveBluff(state, type) {
