@@ -50,7 +50,8 @@ describe('Game online', () => {
   it('legal challenge exposes the piece on both sides', () => {
     const { w, b, flush, start } = pair(); start();
     w.move('b1', 'c3'); flush(); b.move('a7', 'a6'); flush(); w.move('c3', 'd5'); flush(); b.challenge(); flush();
-    expect(b.pub.pieces.w1.faceUp).toBe('n'); expect(w.pub.pieces.w1.faceUp).toBe('n'); expect(b.pub.pending).toBeNull();
+    expect(b.pub.pieces.w1.faceUp).toBe('n'); expect(w.pub.pieces.w1.faceUp).toBe('n');
+    expect(b.pub.pending).toBe('penaltyPick'); expect(b.pub.picker).toBe('w'); // wrong challenge: the mover picks a penalty
   });
 
   it('legal challenge of a king capture ends the game on both sides', () => {

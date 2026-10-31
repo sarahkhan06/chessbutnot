@@ -25,7 +25,8 @@ describe('Game hot-seat', () => {
   });
   it('challenging a legal move exposes it face-up and the challenger still moves', () => {
     const game = g(); game.move('b1', 'c3'); game.move('a7', 'a6'); game.move('c3', 'd5'); game.challenge();
-    expect(game.pub.pieces.w1.faceUp).toBe('n'); expect(game.pub.turn).toBe('b'); expect(game.pub.pending).toBeNull(); expect(game.canChallenge()).toBe(false);
+    expect(game.pub.pieces.w1.faceUp).toBe('n'); expect(game.pub.turn).toBe('b'); expect(game.pub.pending).toBe('penaltyPick'); expect(game.canChallenge()).toBe(false);
+    game.pickPenalty('b0'); expect(game.pub.pending).toBeNull();
     game.move('e7', 'e5'); expect(game.pub.turn).toBe('w');
   });
   it('challenging a bluff removes it, enters penalty pick, penalty removes and reveals', () => {

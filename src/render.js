@@ -44,7 +44,7 @@ export function render(game, ui, onClick) {
   const play = pub.phase === 'play';
   const flip = v === 'b';
   const destMap = new Map((ui.dests || []).map((d) => [d.to, d.legal]));
-  const pickMode = play && pub.pending === 'penaltyPick' && pub.turn === v;
+  const pickMode = play && pub.pending === 'penaltyPick' && pub.picker === v;
   const editable = setup && pub.stage[v] === 'arranging';
   const reveal = ui.mirror && !online && play;
 
@@ -122,8 +122,8 @@ export function render(game, ui, onClick) {
   if (game.lostState) status = 'Your saved game for this room was lost on this device. Start a new game.';
   else if (setup) status = online ? `You are ${name(v)}` : `${name(v)}'s setup`;
   else if (play) {
-    if (pub.pending === 'penaltyPick' && pub.turn === v) status = 'Challenge succeeded — pick a piece to remove';
-    else if (pub.pending === 'penaltyPick') status = `${name(pub.turn)} is picking a penalty…`;
+    if (pub.pending === 'penaltyPick' && pub.picker === v) status = pub.picker === pub.turn ? 'Challenge succeeded — pick a piece to remove' : 'Wrong challenge — pick one of their pieces to remove';
+    else if (pub.pending === 'penaltyPick') status = `${name(pub.picker)} is picking a penalty…`;
     else if (pub.pending === 'awaitVerdict') status = 'Waiting for verdict…';
     else if (pub.pending === 'awaitRemoved') status = 'Waiting…';
     else if (online) {

@@ -46,7 +46,10 @@ function click(sq) {
   if (pub.phase !== 'play') return;
 
   if (pub.pending === 'penaltyPick') {
-    if (pub.turn === v && id && !own) game.pickPenalty(id);
+    if (pub.picker === v && id && !own) {
+      game.pickPenalty(id);
+      if (!me && game.pub.phase === 'play' && game.pub.turn !== v) showPass();
+    }
     return;
   }
   if (pub.pending) return;
@@ -98,7 +101,10 @@ $('challenge').onclick = () => {
   }
   ui.confirmChallenge = false;
   clearSelection();
+  const challenger = game.viewer();
   game.challenge();
+  // Hot-seat: a wrong challenge hands the screen to the mover to pick a penalty.
+  if (!me && game.pub.pending === 'penaltyPick' && game.pub.picker !== challenger) showPass(`${name(game.pub.picker)}: your move was honest — pick a penalty`);
 };
 
 // ---- previous position toggle ----

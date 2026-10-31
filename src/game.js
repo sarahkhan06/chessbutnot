@@ -27,7 +27,8 @@ export class Game {
   }
 
   owns(color) { return this.me === null || this.me === color; }
-  viewer() { return this.me ?? (this.pub.phase === 'setup' ? this.setupColor : this.pub.turn); }
+  // Hot-seat: whoever is picking a penalty holds the screen; otherwise the side to move.
+  viewer() { return this.me ?? (this.pub.phase === 'setup' ? this.setupColor : (this.pub.pending === 'penaltyPick' && this.pub.picker) || this.pub.turn); }
   isGameOver() { return this.pub.phase === 'over'; }
   changed() { this.onChange(); }
 
@@ -138,7 +139,7 @@ export class Game {
   }
 
   pickPenalty(id) {
-    if (this.pub.phase !== 'play' || this.pub.pending !== 'penaltyPick' || this.pub.turn !== this.viewer()) return;
+    if (this.pub.phase !== 'play' || this.pub.pending !== 'penaltyPick' || this.pub.picker !== this.viewer()) return;
     const p = this.pub.pieces[id];
     if (!p || p.color === this.viewer() || p.square === null) return;
     if (this.owns(p.color)) {
@@ -210,7 +211,7 @@ export class Game {
       case 'verdict': {
         if (pub.phase !== 'play' || pub.pending !== 'awaitVerdict' || !TYPES.includes(msg.type)) return false;
         if (msg.legal) {
-          this.pub = setPending(resolveLegal(pub, msg.type), null);
+          this.pub = resolveLegal(pub, msg.type); // leaves pending = 'penaltyPick' for the mover's pick
           if (this.pub.lastMove.capturedId) this.acceptCapture();
         } else {
           this.pub = resolveBluff(pub, msg.type);
@@ -218,7 +219,7 @@ export class Game {
         return true;
       }
       case 'penalty': {
-        if (pub.phase !== 'play' || pub.pending !== 'penaltyPick' || pub.turn !== opp) return false;
+        if (pub.phase !== 'play' || pub.pending !== 'penaltyPick' || pub.picker !== opp) return false;
         const p = pub.pieces[msg.id];
         if (!p || p.color !== this.me || p.square === null) return false;
         const type = this.priv[this.me][msg.id];
@@ -279,7 +280,7 @@ export class Game {
 
   static restore(data, { send, onChange } = {}) {
     const g = new Game({ me: data.me, send, onChange });
-    g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] };
+    g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] };
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     return g;
   }

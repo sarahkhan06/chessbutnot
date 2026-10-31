@@ -27,7 +27,7 @@ describe('promotion vs challenge (review fix 1)', () => {
     const g = hotseat();
     for (const [f, t] of [['h2','h4'],['a7','a5'],['h4','h5'],['a5','a4'],['h5','h6'],['a4','a3'],['h6','g7'],['b7','b6'],['g7','h8']]) g.move(f, t);
     g.challenge();
-    expect(g.pub.pieces.w15.faceUp).toBe('q'); expect(g.pub.pending).toBeNull(); expect(g.priv.w.w15).toBe('q');
+    expect(g.pub.pieces.w15.faceUp).toBe('q'); expect(g.pub.pending).toBe('penaltyPick'); expect(g.pub.picker).toBe('w'); expect(g.priv.w.w15).toBe('q');
   });
   it('the pre-move type survives snapshot/restore for the pending challenge', () => {
     const { w, b, flush, start } = pair(); start();
