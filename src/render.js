@@ -7,6 +7,16 @@ export const name = (c) => (c === 'w' ? 'White' : 'Black');
 const other = (c) => (c === 'w' ? 'b' : 'w');
 const $ = (id) => document.getElementById(id);
 
+// Human label for a history entry; i is its index (ply number).
+export function historyLabel(e, i) {
+  if (!e || e.kind === 'start') return 'Start';
+  if (e.kind === 'move') return `${i}. ${e.from}${e.capture ? '×' : '–'}${e.to}`;
+  if (e.kind === 'legal') return `Challenged: legal, ${GLYPH[e.type]} exposed`;
+  if (e.kind === 'bluff') return `Bluff caught: ${GLYPH[e.type]} removed`;
+  if (e.kind === 'penalty') return `Penalty: ${GLYPH[e.type]} taken on ${e.to}`;
+  return '';
+}
+
 export function overTitle(pub) {
   const loser = other(pub.winner);
   if (pub.reason === 'king-captured') return `${name(pub.winner)} captured the king`;
@@ -38,8 +48,19 @@ export function render(game, ui, onClick) {
   const editable = setup && pub.stage[v] === 'arranging';
   const reveal = ui.mirror && !online && play;
 
+  // Rewind: show the board as it was after history entry ui.viewPly instead of the live position.
+  const hist = pub.history || [];
+  const viewing = ui.viewPly != null && ui.viewPly < hist.length - 1;
+  const entry = viewing ? hist[ui.viewPly] : null;
+  const bySquare = {};
+  if (entry) for (const id in entry.board) bySquare[entry.board[id]] = id;
+  const at = (s) => (viewing ? bySquare[s] ?? null : pieceAt(pub, s));
+  const faceUpOf = (id) => (viewing ? entry.faceUp?.[id] ?? null : pub.pieces[id].faceUp);
+  const hl = viewing ? entry : pub.lastMove;
+
   const board = $('board');
   board.innerHTML = '';
+  board.classList.toggle('review', viewing);
   for (let ri = 0; ri < 8; ri++) {
     for (let fi = 0; fi < 8; fi++) {
       const rank = flip ? ri + 1 : 8 - ri;
@@ -48,24 +69,25 @@ export function render(game, ui, onClick) {
       const el = document.createElement('div');
       el.className = 'sq' + ((file + rank) % 2 ? ' dk' : '');
       el.dataset.sq = sqName;
-      if (pub.lastMove && (pub.lastMove.from === sqName || pub.lastMove.to === sqName)) el.classList.add('last');
-      if (sqName === ui.selected) el.classList.add('sel');
-      if (destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');
-      const id = pieceAt(pub, sqName);
+      if (hl && (hl.from === sqName || hl.to === sqName)) el.classList.add('last');
+      if (!viewing && sqName === ui.selected) el.classList.add('sel');
+      if (!viewing && destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');
+      const id = at(sqName);
       if (id) el.classList.add('occ');
       if (ri === 7) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = FILES[file]; el.appendChild(c); }
       if (fi === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank; el.appendChild(c); }
-      if (editable && id && pub.pieces[id].color === v) el.classList.add('edit');
+      if (!viewing && editable && id && pub.pieces[id].color === v) el.classList.add('edit');
       if (id) {
         const p = pub.pieces[id];
         const own = p.color === v;
+        const fu = faceUpOf(id);
         const c = document.createElement('div');
         c.className = 'card ' + (own ? 'own' : 'foe');
         if (own) c.textContent = GLYPH[game.priv[v][id]];
-        else if (p.faceUp) c.textContent = GLYPH[p.faceUp];
+        else if (fu) c.textContent = GLYPH[fu];
         else if (reveal) { c.textContent = GLYPH[game.priv[p.color][id]]; c.classList.add('rev'); }
-        if (p.faceUp) c.classList.add('exposed');
-        if (pickMode && !own) el.classList.add('pickable');
+        if (fu) c.classList.add('exposed');
+        if (!viewing && pickMode && !own) el.classList.add('pickable');
         el.appendChild(c);
       }
       el.onclick = () => onClick(sqName);
@@ -127,6 +149,14 @@ export function render(game, ui, onClick) {
   $('mirror').style.display = !online && play ? '' : 'none';
   $('online').style.display = online ? 'none' : '';
   $('bluff-hint').classList.toggle('hidden', !ui.showBluffHint);
+
+  const rp = $('replay');
+  rp.classList.toggle('hidden', !(play || pub.phase === 'over') || hist.length < 2);
+  rp.classList.toggle('reviewing', viewing);
+  const idx = viewing ? ui.viewPly : hist.length - 1;
+  $('rw-label').textContent = historyLabel(hist[idx], idx);
+  $('rw-first').disabled = idx === 0; $('rw-prev').disabled = idx === 0;
+  $('rw-next').disabled = !viewing; $('rw-last').disabled = !viewing;
 
   const over = $('over');
   over.classList.toggle('hidden', pub.phase !== 'over');

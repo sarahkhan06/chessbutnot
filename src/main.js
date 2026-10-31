@@ -8,12 +8,13 @@ import { pieceAt } from './rules/state.js';
 const $ = (id) => document.getElementById(id);
 
 let game, net = null, room = null, me = null, confirmTimer = null;
-const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false };
+const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false, viewPly: null };
 let chat = [];
 
 // ---- rendering and persistence ----
 function draw() { render(game, ui, click); }
 function onChange() {
+  ui.viewPly = null; // any new event snaps the view back to live
   if (room && me) saveGame(room, me, game.snapshot());
   draw();
 }
@@ -30,6 +31,7 @@ $('pass-btn').onclick = () => { $('pass').classList.add('hidden'); ui.passing = 
 // ---- board clicks ----
 function click(sq) {
   if (ui.passing || game.lostState) return;
+  if (ui.viewPly !== null) { ui.viewPly = null; clearSelection(); return draw(); }
   const pub = game.pub, v = game.viewer();
   const id = pieceAt(pub, sq);
   const own = id && pub.pieces[id].color === v;
@@ -98,6 +100,27 @@ $('challenge').onclick = () => {
   clearSelection();
   game.challenge();
 };
+
+// ---- rewind ----
+function rewind(to) {
+  const last = game.pub.history.length - 1;
+  const cur = ui.viewPly ?? last;
+  const next = Math.max(0, Math.min(last, typeof to === 'function' ? to(cur) : to));
+  ui.viewPly = next >= last ? null : next;
+  clearSelection();
+  draw();
+}
+$('rw-first').onclick = () => rewind(0);
+$('rw-prev').onclick = () => rewind((c) => c - 1);
+$('rw-next').onclick = () => rewind((c) => c + 1);
+$('rw-last').onclick = () => rewind(Infinity);
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || $('replay').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft') rewind((c) => c - 1);
+  else if (e.key === 'ArrowRight') rewind((c) => c + 1);
+  else if (e.key === 'Home') rewind(0);
+  else if (e.key === 'End') rewind(Infinity);
+});
 
 // ---- misc buttons ----
 $('mirror').onclick = () => { ui.mirror = !ui.mirror; draw(); };

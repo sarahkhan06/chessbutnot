@@ -5,6 +5,18 @@ const other = (c) => (c === 'w' ? 'b' : 'w');
 const clone = (s) => structuredClone(s);
 const bump = (s) => { s.version += 1; return s; };
 
+// Move history: one entry per board-changing event, each with the board after it, so the UI can rewind.
+function boardOf(s) {
+  const board = {}, faceUp = {};
+  for (const id in s.pieces) {
+    const p = s.pieces[id];
+    if (p.square) board[id] = p.square;
+    if (p.faceUp) faceUp[id] = p.faceUp;
+  }
+  return { board, faceUp };
+}
+const record = (s, entry) => { s.history.push({ ...entry, ...boardOf(s) }); return s; };
+
 export function createState() {
   const pieces = {};
   for (const color of ['w', 'b']) {
@@ -18,7 +30,7 @@ export function createState() {
     stage: { w: 'arranging', b: 'arranging' },
     pieces, lost: { w: [], b: [] },
     lastMove: null, pending: null, penaltyId: null,
-    winner: null, reason: null,
+    winner: null, reason: null, history: [],
   };
 }
 
@@ -35,7 +47,7 @@ export function occupancy(state, color) {
 }
 
 export const setStage = (state, color, stage) => bump({ ...clone(state), stage: { ...state.stage, [color]: stage } });
-export const startPlay = (state) => bump({ ...clone(state), phase: 'play', turn: 'w' });
+export const startPlay = (state) => bump(record({ ...clone(state), phase: 'play', turn: 'w' }, { kind: 'start' }));
 // Local bookkeeping only: deliberately does not bump `version`, so a side waiting on a reply
 // is never "newer" than the side that already answered it.
 export const setPending = (state, pending, penaltyId = null) => ({ ...clone(state), pending, penaltyId });
@@ -57,7 +69,7 @@ export function applyMove(state, from, to) {
   s.pieces[id].moved = true;
   s.lastMove = lastMove;
   s.turn = other(state.turn);
-  return bump(s);
+  return bump(record(s, { kind: 'move', from, to, capture: !!targetId }));
 }
 
 export function acceptLastMove(state) {
@@ -85,7 +97,7 @@ export function resolveLegal(state, type) {
   const s = clone(state);
   s.pieces[s.lastMove.pieceId].faceUp = type;
   s.lastMove.challengeable = false;
-  return bump(s);
+  return bump(record(s, { kind: 'legal', type, from: s.lastMove.from, to: s.lastMove.to }));
 }
 
 export function resolveBluff(state, type) {
@@ -102,15 +114,16 @@ export function resolveBluff(state, type) {
   s.lastMove.challengeable = false;
   if (type === 'k') endGame(s, s.turn, 'king-bluffed');
   else s.pending = 'penaltyPick';
-  return bump(s);
+  return bump(record(s, { kind: 'bluff', type, from: s.lastMove.from, to }));
 }
 
 export function applyPenalty(state, id, type) {
   const s = clone(state);
   const color = s.pieces[id].color;
+  const square = s.pieces[id].square;
   s.pieces[id].square = null;
   s.lost[color].push({ id, type, by: null });
   s.pending = null; s.penaltyId = null;
   if (type === 'k') endGame(s, other(color), 'king-penalty');
-  return bump(s);
+  return bump(record(s, { kind: 'penalty', type, from: null, to: square }));
 }

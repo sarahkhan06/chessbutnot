@@ -279,7 +279,7 @@ export class Game {
 
   static restore(data, { send, onChange } = {}) {
     const g = new Game({ me: data.me, send, onChange });
-    g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null };
+    g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] };
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     return g;
   }
