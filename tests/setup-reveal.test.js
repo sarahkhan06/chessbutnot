@@ -57,3 +57,22 @@ describe('end-of-game reveal of the starting arrangements', () => {
     w.newGame(); expect(w.initial.w.w0).toBe('r'); expect(w.setups).toEqual({ w: null, b: null });
   });
 });
+
+describe('older versions cannot leak identities through sync or saved games', () => {
+  const dirty = (g) => {
+    const pub = structuredClone(g.pub); pub.version += 5; pub.pieces.w1.faceUp = 'n';
+    pub.history = [...pub.history, { kind: 'legal', type: 'n', from: 'b1', to: 'c3', board: {}, faceUp: { w1: 'n' } }];
+    return pub;
+  };
+  it('a sync carrying face-up marks is applied without them', () => {
+    const { b, start } = pair(); start();
+    expect(b.syncFrom(dirty(b))).toBe(true);
+    expect(b.pub.pieces.w1.faceUp).toBeNull();
+    const last = b.pub.history.at(-1); expect(last.kind).toBe('legal'); expect('type' in last).toBe(false); expect(last.faceUp).toEqual({});
+  });
+  it('a saved game from an older version is restored without them', () => {
+    const { w, start } = pair(); start();
+    const snap = JSON.parse(JSON.stringify(w.snapshot())); snap.pub.pieces.b1.faceUp = 'n';
+    expect(Game.restore(snap, {}).pub.pieces.b1.faceUp).toBeNull();
+  });
+});

@@ -9,6 +9,17 @@ import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, le
 
 const other = (c) => (c === 'w' ? 'b' : 'w');
 
+// Identities are never public mid-game, so drop any face-up marks (and the type on a 'legal'
+// history entry) that an older version of the game, a saved game or a peer might still carry.
+function scrub(pub) {
+  for (const id in pub.pieces) pub.pieces[id].faceUp = null;
+  pub.history = (pub.history || []).map((e) => {
+    const { type, faceUp, ...rest } = e;
+    return e.kind === 'legal' ? { ...rest, faceUp: {} } : { ...e, faceUp: {} };
+  });
+  return pub;
+}
+
 export class Game {
   constructor({ me = null, send = () => {}, onChange = () => {} } = {}) {
     this.me = me;
@@ -311,7 +322,7 @@ export class Game {
 
   static restore(data, { send, onChange } = {}) {
     const g = new Game({ me: data.me, send, onChange });
-    g.pub = { ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] };
+    g.pub = scrub({ ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] });
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     g.initial = data.initial ?? (g.pub.phase === 'setup' ? structuredClone(g.priv) : null);
     g.setups = data.setups ?? { w: null, b: null };
@@ -325,7 +336,7 @@ export class Game {
     if (gen > this.pub.gen) this.reset(gen); // a new game we never heard about: fresh identities
     else if (this.me && pub.stage?.[this.me] === 'ready' && this.pub.stage[this.me] !== 'ready') this.lostState = true;
     const before = this.pub;
-    this.pub = structuredClone(pub);
+    this.pub = scrub(structuredClone(pub));
     // Apply any pawn transformations whose `captured` message we never saw.
     if (this.me) {
       const opp = other(this.me);
