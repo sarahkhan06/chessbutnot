@@ -104,8 +104,9 @@ export function render(game, ui, onClick) {
       t.appendChild(s);
     }
   };
-  tray('cap-top', other(v));
-  tray('cap-bottom', v);
+  // Captured pieces sit next to the player who took them (your lost pieces appear by the opponent).
+  tray('cap-top', v);
+  tray('cap-bottom', other(v));
 
   $('setup').classList.toggle('hidden', !setup);
   if (setup) {
