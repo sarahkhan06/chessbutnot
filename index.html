@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
+<div class="layout">
 <main>
   <header>
     <div class="titlebar"><h1>Hidden Identity Chess</h1><span id="conn" class="conn hidden"></span></div>
@@ -28,6 +29,15 @@
   <p class="hint" id="hint">Your pieces face you, theirs are blank. A piece's first move must be honest; after that it may move like anything. A challenged bluff costs you that piece and one more.</p>
   <p class="hint bluff-hint hidden" id="bluff-hint">Amber squares are bluffs: moving there breaks your piece's real rules.</p>
 </main>
+<aside id="chat" class="chat hidden">
+  <div class="chat-head">Chat</div>
+  <div id="chat-log" class="chat-log"></div>
+  <form id="chat-form" class="chat-form" autocomplete="off">
+    <input id="chat-input" maxlength="300" placeholder="Say something…" />
+    <button type="submit" class="primary">Send</button>
+  </form>
+</aside>
+</div>
 <div id="pass" class="pass hidden"><div><h2 id="pass-title"></h2><p>Hand the screen over, then tap.</p><button id="pass-btn">I'm ready</button></div></div>
 <div id="over" class="pass hidden"><div><h2 id="over-title"></h2><button id="over-btn">Play again</button></div></div>
 <script type="module" src="/src/main.js"></script>

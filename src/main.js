@@ -1,6 +1,7 @@
 import { Game } from './game.js';
 import { connect } from './net.js';
-import { saveGame, loadGame, clearGame } from './storage.js';
+import { saveGame, loadGame, clearGame, saveChat, loadChat } from './storage.js';
+import { chatMessage, isChatMessage, appendChat } from './chat.js';
 import { render, name } from './render.js';
 import { pieceAt } from './rules/state.js';
 
@@ -8,6 +9,7 @@ const $ = (id) => document.getElementById(id);
 
 let game, net = null, room = null, me = null, confirmTimer = null;
 const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false };
+let chat = [];
 
 // ---- rendering and persistence ----
 function draw() { render(game, ui, click); }
@@ -108,6 +110,29 @@ $('new').onclick = restart;
 $('over-btn').onclick = restart;
 $('copy').onclick = () => { $('link').select(); navigator.clipboard?.writeText($('link').value); $('copy').textContent = 'Copied!'; };
 
+// ---- chat (online only) ----
+function drawChat() {
+  const log = $('chat-log');
+  log.innerHTML = '';
+  for (const m of chat) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + (m.from === me ? 'me' : 'them');
+    el.textContent = m.text;
+    el.title = new Date(m.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    log.appendChild(el);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+function addChat(m) { chat = appendChat(chat, m); if (room) saveChat(room, chat); drawChat(); }
+$('chat-form').onsubmit = (e) => {
+  e.preventDefault();
+  const m = chatMessage($('chat-input').value, me);
+  if (!m || !me) return;
+  $('chat-input').value = '';
+  send(m);
+  addChat(m);
+};
+
 // ---- online ----
 const send = (m) => { net?.send(m); };
 function onStatus(status, detail) { ui.connection = { status, detail }; draw(); }
@@ -116,6 +141,7 @@ function resendOutstanding() { const o = game.outstanding(); if (o) send(o); }
 function onMessage(m) {
   if (m.t === 'hello') { const sync = game.onHello(m); if (sync) send(sync); resendOutstanding(); }
   else if (m.t === 'sync') { game.syncFrom(m.pub); resendOutstanding(); }
+  else if (m.t === 'chat') { if (isChatMessage(m, me)) addChat(m); }
   else game.receive(m);
 }
 
@@ -128,6 +154,7 @@ function goOnline(color, code, snapshot) {
     game = new Game({ me: color, send, onChange });
   }
   history.replaceState(null, '', `${location.pathname}?room=${code}`);
+  chat = loadChat(code); $('chat').classList.remove('hidden'); drawChat();
   if (color === 'w') {
     $('link').value = `${location.origin}${location.pathname}?room=${code}`;
     $('invite').classList.remove('hidden');

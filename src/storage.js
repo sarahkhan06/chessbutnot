@@ -16,3 +16,17 @@ export function loadGame(room, color, s) {
 export function clearGame(room, color, s) {
   try { store(s).removeItem(key(room, color)); } catch { /* storage unavailable */ }
 }
+
+// Chat log for a room, shared by whichever seat this browser holds.
+const chatKey = (room) => `hic:${room}:chat`;
+
+export function saveChat(room, log, s) {
+  try { store(s).setItem(chatKey(room), JSON.stringify(log)); } catch { /* storage unavailable */ }
+}
+
+export function loadChat(room, s) {
+  try {
+    const v = JSON.parse(store(s).getItem(chatKey(room)) ?? '[]');
+    return Array.isArray(v) ? v : [];
+  } catch { return []; }
+}
