@@ -84,14 +84,15 @@ function hintBluffOnce() {
 
 // ---- setup buttons ----
 $('done').onclick = () => { clearSelection(); game.lockIn(game.viewer()); };
-$('ready').onclick = () => {
-  const v = game.viewer();
-  game.readyUp(v);
+// Hot-seat: after a side readies up, hand the screen over (or start White's first turn).
+function afterReady(v) {
   if (!me) {
     if (game.pub.phase === 'play') showPass('White to move');
     else if (v === 'w') showPass('Black: arrange your pieces');
   }
-};
+}
+$('ready').onclick = () => { const v = game.viewer(); game.readyUp(v); afterReady(v); };
+$('skip').onclick = () => { clearSelection(); const v = game.viewer(); game.useStandard(v); afterReady(v); };
 
 // ---- challenge (two taps) ----
 $('challenge').onclick = () => {

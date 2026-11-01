@@ -76,6 +76,14 @@ export class Game {
     this.changed();
   }
 
+  // One tap: discard any swaps, keep the normal layout, lock in and ready up.
+  useStandard(color) {
+    if (this.pub.phase !== 'setup' || !this.owns(color) || this.pub.stage[color] !== 'arranging') return;
+    this.priv[color] = standardIdentity(color);
+    this.lockIn(color);
+    this.readyUp(color);
+  }
+
   lockIn(color) {
     if (this.pub.phase !== 'setup' || this.pub.stage[color] !== 'arranging') return;
     this.pub = setStage(this.pub, color, 'done');

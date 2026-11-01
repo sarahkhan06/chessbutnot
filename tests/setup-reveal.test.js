@@ -76,3 +76,21 @@ describe('older versions cannot leak identities through sync or saved games', ()
     expect(Game.restore(snap, {}).pub.pieces.b1.faceUp).toBeNull();
   });
 });
+
+describe('standard setup (skip rearranging)', () => {
+  it('hot-seat: each side can skip; swaps are discarded and play starts', () => {
+    const g = new Game(); g.swap('w', 'a1', 'e1'); g.useStandard('w');
+    expect(g.pub.stage.w).toBe('ready'); expect(g.priv.w).toEqual(standardIdentity('w')); expect(g.viewer()).toBe('b');
+    g.useStandard('b');
+    expect(g.pub.phase).toBe('play'); expect(g.startingSetup().w).toEqual(standardIdentity('w')); expect(g.startingSetup().b).toEqual(standardIdentity('b'));
+  });
+  it('online: one side skips, the other still rearranges; locked-in sides cannot skip', () => {
+    const { w, b, flush } = pair();
+    w.useStandard('w'); flush(); expect(w.pub.phase).toBe('setup'); expect(b.pub.stage.w).toBe('ready');
+    b.swap('b', 'a8', 'b8'); b.lockIn('b'); b.useStandard('b'); // already locked: ignored
+    expect(b.pub.stage.b).toBe('done'); expect(b.priv.b.b0).toBe('n');
+    b.readyUp('b'); flush();
+    expect(w.pub.phase).toBe('play'); expect(b.pub.phase).toBe('play');
+    expect(b.startingSetup().b.b0).toBe('n'); expect(b.startingSetup().w).toBeNull();
+  });
+});

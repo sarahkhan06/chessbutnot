@@ -125,9 +125,9 @@ export function render(game, ui, onClick) {
   if (setup) {
     const s = pub.stage[v];
     $('pill').textContent = s === 'arranging' ? 'Rearranging' : s === 'done' ? 'Locked in' : 'Ready — waiting for opponent…';
-    $('done').style.display = s === 'arranging' ? '' : 'none';
+    $('done').style.display = $('skip').style.display = s === 'arranging' ? '' : 'none';
     $('ready').style.display = s === 'done' ? '' : 'none';
-    $('setup-hint').textContent = s === 'arranging' ? 'Tap two of your pieces to swap them — any piece, either row.'
+    $('setup-hint').textContent = s === 'arranging' ? 'Tap two of your pieces to swap them — any piece, either row — or keep the standard layout.'
       : s === 'done' ? 'Your setup is locked. Ready up when you are.' : 'Game starts when both players are ready.';
   }
 
