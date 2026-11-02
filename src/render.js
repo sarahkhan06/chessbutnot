@@ -22,6 +22,8 @@ export function overTitle(pub) {
   if (pub.reason === 'king-captured') return `${name(pub.winner)} captured the king`;
   if (pub.reason === 'king-penalty') return `${name(loser)}'s king was taken as a penalty`;
   if (pub.reason === 'king-bluffed') return `${name(loser)}'s king was caught bluffing`;
+  if (pub.reason === 'resigned') return `${name(loser)} resigned`;
+  if (pub.reason === 'draw') return 'Draw by agreement';
   return `${name(pub.winner)} wins`;
 }
 

@@ -42,7 +42,7 @@ describe('promotion vs challenge (review fix 1)', () => {
 
 describe('game generation (review fix 2)', () => {
   it('new game bumps gen on both sides and gens stay aligned', () => {
-    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush();
+    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush(); w.resign(); flush();
     expect(w.pub.gen).toBe(0); w.newGame(); flush();
     expect(w.pub.gen).toBe(1); expect(b.pub.gen).toBe(1); expect(b.pub.phase).toBe('setup');
   });
@@ -62,7 +62,7 @@ describe('game generation (review fix 2)', () => {
   it('a stale sync from an older generation is ignored', () => {
     const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush();
     const old = structuredClone(w.pub);
-    w.newGame(); flush();
+    w.resign(); flush(); w.newGame(); flush();
     expect(b.syncFrom(old)).toBe(false); expect(b.pub.phase).toBe('setup');
   });
   it('ready in a hello from an older generation is ignored', () => {

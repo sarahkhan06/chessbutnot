@@ -115,7 +115,7 @@ describe('Game online', () => {
   });
 
   it('new message resets the other side to setup', () => {
-    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush(); w.newGame(); flush();
+    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush(); w.resign(); flush(); w.newGame(); flush();
     expect(b.pub.phase).toBe('setup'); expect(b.pub.pieces.w12.square).toBe('e2'); expect(b.priv.b.b4).toBe('k');
   });
 

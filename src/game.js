@@ -2,7 +2,7 @@
 // Local UI actions and incoming messages both flow through here; outgoing messages leave via `send`.
 import {
   createState, pieceAt, occupancy, setStage, startPlay, setPending, applyMove, acceptLastMove,
-  revealLost, resolveLegal, resolveBluff, applyPenalty,
+  revealLost, resolveLegal, resolveBluff, applyPenalty, resignGame, agreeDraw, offerDraw, declineDraw,
 } from './rules/state.js';
 import { TYPES, destinations } from './rules/geometry.js';
 import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, legalDestinations, isValidIdentity } from './rules/identity.js';
@@ -104,7 +104,11 @@ export class Game {
   }
 
   // ---- play: queries ----
-  canAct() { return this.pub.phase === 'play' && this.pub.pending === null && this.pub.turn === this.viewer() && this.owns(this.pub.turn); }
+  canAct() {
+    const p = this.pub;
+    // Online, your own outstanding draw offer blocks you until the opponent answers or acts.
+    return p.phase === 'play' && p.pending === null && p.turn === this.viewer() && this.owns(p.turn) && (!this.me || p.drawOffer !== this.me);
+  }
 
   destinations(from) {
     if (!this.canAct()) return [];
@@ -197,6 +201,44 @@ export class Game {
     this.changed();
   }
 
+  // ---- resign and draw ----
+  resign() {
+    if (this.pub.phase !== 'play') return;
+    this.pub = resignGame(this.pub, this.me ?? this.viewer());
+    this.send({ t: 'resign' });
+    this.changed();
+  }
+
+  canOfferDraw() { return !!this.me && this.pub.phase === 'play' && this.pub.pending === null && this.pub.drawOffer === null; }
+
+  offerDraw() {
+    if (!this.canOfferDraw()) return;
+    this.send({ t: 'draw', version: this.pub.version });
+    this.pub = offerDraw(this.pub, this.me);
+    this.changed();
+  }
+
+  acceptDraw() {
+    if (!this.me || this.pub.phase !== 'play' || this.pub.drawOffer !== other(this.me)) return;
+    this.send({ t: 'drawAccept', version: this.pub.version });
+    this.pub = agreeDraw(this.pub);
+    this.changed();
+  }
+
+  declineDraw() {
+    if (!this.me || this.pub.phase !== 'play' || this.pub.drawOffer !== other(this.me)) return;
+    this.send({ t: 'drawDecline' });
+    this.pub = declineDraw(this.pub);
+    this.changed();
+  }
+
+  // Hot-seat: both players are at the screen, so a draw is agreed in one step.
+  agreeDraw() {
+    if (this.me || this.pub.phase !== 'play') return;
+    this.pub = agreeDraw(this.pub);
+    this.changed();
+  }
+
   newGame() {
     this.reset();
     this.send({ t: 'new' });
@@ -282,7 +324,29 @@ export class Game {
         this.setups[opp] = { ...msg.ids };
         return true;
       }
+      case 'resign': {
+        if (pub.phase !== 'play') return false;
+        this.pub = resignGame(pub, opp);
+        return true;
+      }
+      case 'draw': {
+        if (pub.phase !== 'play' || pub.pending !== null || pub.drawOffer !== null || msg.version !== pub.version) return false;
+        this.pub = offerDraw(pub, opp);
+        return true;
+      }
+      case 'drawAccept': {
+        if (pub.phase !== 'play' || pub.drawOffer !== this.me || msg.version !== pub.version) return false;
+        this.pub = agreeDraw(pub);
+        return true;
+      }
+      case 'drawDecline': {
+        if (pub.phase !== 'play' || pub.drawOffer !== this.me) return false;
+        this.pub = declineDraw(pub);
+        return true;
+      }
       case 'new': {
+        // Only outside play: a stray tap mid-game must not wipe the board for both players.
+        if (pub.phase === 'play') return false;
         this.reset();
         return true;
       }
