@@ -110,6 +110,10 @@ applies to the setup hand-over between White's and Black's arrangement.
   these always hold because the offerer could not act. Decline sends
   `{ t: 'drawDecline' }` (accepted when `pub.drawOffer === opp`) and clears
   the offer on both sides.
+- Crossing offers (both players offer at the same position; each then
+  receives the other's `draw` with `version === pub.version - 1` while
+  its own offer stands) resolve as a mutual draw on both sides. Added
+  after review: without it both sides were stuck with no way to act.
 - Offer state lives in `pub` (`drawOffer: 'w' | 'b' | null`) so it is
   carried by sync and survives refresh. The reducers for a move, a verdict
   (legal or bluff) and a penalty set it to null; on the offerer's side
@@ -206,6 +210,15 @@ applies to the setup hand-over between White's and Black's arrangement.
   worst it makes the game unverifiable, which the UI says out loud.
 - A new generation (`gen` higher than ours) resets the log along with
   everything else, as today.
+- The replay trusts only itself (added after review): each move entry's
+  origin and capture must match where the replay has the pieces, "first
+  move" is decided by the replay's own `moved` flag rather than the
+  entry's, and at the end the replay's board must equal `pub.pieces`.
+  Any mismatch is `{ ok: false, why: 'log', ply }`. Without this, a
+  forged sync could append a move that claims `moverMoved: true` and
+  dodge both the challenge and the first-move check.
+- The commitment hash is checked before the taint flag, so forcing a
+  taint cannot turn a mismatched reveal into a neutral line.
 
 ### Reveal and verification at game over
 

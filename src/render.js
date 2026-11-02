@@ -19,7 +19,7 @@ export function historyLabel(e, i) {
 }
 
 // One line on the over panel about the opponent's honesty, from Game.verification().
-const CLAIMS = { verdict: 'false verdict', bluff: 'false bluff reveal', captured: 'false capture reveal', penalty: 'false penalty reveal', 'first-move': 'dishonest first move' };
+const CLAIMS = { verdict: 'false verdict', bluff: 'false bluff reveal', captured: 'false capture reveal', penalty: 'false penalty reveal', 'first-move': 'dishonest first move', log: 'move log does not match the board' };
 export function verifyLine(v, log, online) {
   if (!v) return online ? ['Waiting for the opponent’s reveal…', 'muted'] : ['', ''];
   if (v.ok === true) return ['Opponent’s game verified', 'good'];

@@ -66,6 +66,14 @@ describe('draw by agreement', () => {
   });
 });
 
+describe('simultaneous draw offers (review fix)', () => {
+  it('offers that cross on the wire resolve as a mutual draw instead of deadlocking', () => {
+    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush();
+    w.offerDraw(); b.offerDraw(); flush();
+    for (const g of [w, b]) expect(g.pub).toMatchObject({ phase: 'over', winner: null, reason: 'draw' });
+  });
+});
+
 describe('new game is only accepted outside play', () => {
   it('a stray new mid-game is ignored; new at game over resets', () => {
     const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush();

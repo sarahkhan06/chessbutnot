@@ -79,10 +79,11 @@ export class Game {
   verification() {
     const opp = this.me && other(this.me);
     if (!opp || !this.setups[opp]) return null;
-    if (this.logTainted) return { ok: null, why: 'diverged' };
     if (!this.oppCommit) return { ok: null, why: 'no-commit' };
+    // The hash check needs no log, so a forced taint cannot hide a mismatched reveal behind a neutral line.
     if (!this.oppSalt || commitment(opp, this.setups[opp], this.oppSalt) !== this.oppCommit) return { ok: false, why: 'commitment' };
-    return verify(this.pub.log, this.setups[opp], opp);
+    if (this.logTainted) return { ok: null, why: 'diverged' };
+    return verify(this.pub.log, this.setups[opp], opp, this.pub.pieces);
   }
 
   rememberCommit(commit) { if (typeof commit === 'string' && !this.oppCommit) this.oppCommit = commit; }
@@ -359,7 +360,10 @@ export class Game {
         return true;
       }
       case 'draw': {
-        if (pub.phase !== 'play' || pub.pending !== null || pub.drawOffer !== null || msg.version !== pub.version) return false;
+        if (pub.phase !== 'play' || pub.pending !== null) return false;
+        // Both offered at the same position: a mutual draw, resolved identically on both sides.
+        if (pub.drawOffer === this.me && msg.version === pub.version - 1) { this.pub = agreeDraw(pub); return true; }
+        if (pub.drawOffer !== null || msg.version !== pub.version) return false;
         this.pub = offerDraw(pub, opp);
         return true;
       }
@@ -433,6 +437,7 @@ export class Game {
       ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null,
       history: Array.isArray(data.pub.history) ? data.pub.history : [], log: Array.isArray(data.pub.log) ? data.pub.log : [], drawOffer: data.pub.drawOffer ?? null,
     });
+    if (g.seat) g.me = colorFor(g.seat, g.pub.gen); // colours alternate with the generation; priv is keyed by the saved colour
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     g.initial = data.initial ?? (g.pub.phase === 'setup' ? structuredClone(g.priv) : null);
     g.setups = data.setups ?? { w: null, b: null };

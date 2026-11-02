@@ -37,4 +37,10 @@ describe('seats and colour swap', () => {
     snap.pub.gen = 1; snap.me = 'b'; expect(Game.restore(snap, {}).seat).toBe('host');
     snap.pub.gen = 1; snap.me = 'w'; expect(Game.restore(snap, {}).seat).toBe('guest');
   });
+  it('restoring a rematch keeps the swapped colour and can keep playing (review fix)', () => {
+    const { h, g, flush, start } = pair(); start(); h.resign(); flush(); h.newGame(); flush();
+    const r = Game.restore(JSON.parse(JSON.stringify(h.snapshot())), {});
+    expect(r.me).toBe('b'); expect(r.priv.b.b4).toBe('k'); expect(r.priv.w).toBeNull();
+    expect(() => r.readyUp('b')).not.toThrow(); expect(r.pub.stage.b).toBe('ready');
+  });
 });

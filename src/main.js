@@ -206,7 +206,7 @@ if ('IntersectionObserver' in window) {
 $('chat-new').onclick = () => { $('chat').scrollIntoView({ behavior: 'smooth', block: 'end' }); $('chat-new').classList.add('hidden'); };
 
 // ---- online ----
-const send = (m) => { net?.send(m); };
+const send = (m) => net?.send(m) ?? false; // false while disconnected, so chat can queue
 function onStatus(status, detail) { ui.connection = { status, detail }; draw(); }
 function onOpen() { send(game.helloMessage()); flushChat(); }
 function resendOutstanding() { const o = game.outstanding(); if (o) send(o); }

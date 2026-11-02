@@ -11,9 +11,11 @@ export const commitment = (color, ids, salt) => sha256(`${color}|${idsString(ids
 
 // Replay the public log with the opponent's revealed identities and check every claim they made.
 // `setup` maps the opponent's piece ids to types as arranged before move one; `color` is theirs.
-// Returns { ok: true } or { ok: false, why, ply } where why is one of
-// 'first-move' | 'verdict' | 'bluff' | 'captured' | 'penalty' and ply is the index into `log`.
-export function verify(log, setup, color) {
+// Only the replay's own state is trusted: an entry's `moverMoved`, origin and capture are checked
+// against it, and `pieces` (the final board, if given) must match where the replay ends up, so a
+// forged log cannot vouch for itself. Returns { ok: true } or { ok: false, why, ply } where why is
+// 'first-move' | 'verdict' | 'bluff' | 'captured' | 'penalty' | 'log' and ply is the index into `log`.
+export function verify(log, setup, color, pieces = null) {
   const pos = {};
   for (const c of ['w', 'b']) for (let i = 0; i < 16; i++) { const id = `${c}${i}`; pos[id] = { square: startSquare(id), moved: false }; }
   const ids = { ...setup };
@@ -32,13 +34,18 @@ export function verify(log, setup, color) {
     switch (e.k) {
       case 'move': {
         const mover = e.pieceId[0];
+        const p = pos[e.pieceId];
+        if (!p || p.square !== e.from) return fail('log', ply);
+        const occupant = Object.keys(pos).find((id) => pos[id].square === e.to) ?? null;
+        if (occupant !== (e.capturedId ?? null) || (occupant && occupant[0] === mover)) return fail('log', ply);
         const occ = occupancyFor(mover);
-        last = { ...e, occ, movedAs: theirs(e.pieceId) ? ids[e.pieceId] : null };
+        const moverMoved = p.moved, capturedMoved = occupant ? pos[occupant].moved : null;
+        last = { ...e, moverMoved, capturedMoved, occ, movedAs: theirs(e.pieceId) ? ids[e.pieceId] : null };
         if (theirs(e.pieceId)) {
-          if (!e.moverMoved && !patternMoves(last.movedAs, color, e.from, occ, false).includes(e.to)) return fail('first-move', ply);
+          if (!moverMoved && !patternMoves(last.movedAs, color, e.from, occ, false).includes(e.to)) return fail('first-move', ply);
           if (last.movedAs === 'p' && rankOf(e.to) === far) ids[e.pieceId] = 'q';
         }
-        if (e.capturedId) pos[e.capturedId].square = null;
+        if (occupant) pos[occupant].square = null;
         pos[e.pieceId] = { square: e.to, moved: true };
         break;
       }
@@ -47,7 +54,8 @@ export function verify(log, setup, color) {
         break;
       }
       case 'bluff': {
-        if (theirs(e.pieceId) && last && e.type !== last.movedAs) return fail('bluff', ply);
+        if (!last || last.pieceId !== e.pieceId) return fail('log', ply);
+        if (theirs(e.pieceId) && e.type !== last.movedAs) return fail('bluff', ply);
         pos[e.pieceId].square = null;
         if (last?.capturedId) pos[last.capturedId] = { square: last.to, moved: !!last.capturedMoved };
         break;
@@ -58,6 +66,7 @@ export function verify(log, setup, color) {
         break;
       }
       case 'penalty': {
+        if (!pos[e.id] || pos[e.id].square === null) return fail('log', ply);
         if (theirs(e.id) && ids[e.id] !== e.type) return fail('penalty', ply);
         pos[e.id].square = null;
         break;
@@ -65,5 +74,6 @@ export function verify(log, setup, color) {
       default: break; // resign, draw
     }
   }
+  if (pieces) for (const id in pos) if ((pieces[id]?.square ?? null) !== pos[id].square) return fail('log', log.length);
   return { ok: true };
 }

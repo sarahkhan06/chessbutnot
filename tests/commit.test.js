@@ -77,4 +77,26 @@ describe('setup commitment', () => {
     const l = Game.restore(legacy, {}); expect(l.pub.log).toEqual([]); expect(l.pub.drawOffer).toBeNull(); expect(l.salt).toMatch(/^[0-9a-f]{32}$/); expect(l.oppCommit).toBeNull();
     l.move('e2', 'e4'); expect(l.pub.log.length).toBe(1);
   });
+  it('a forged sync cannot smuggle an impossible, unchallengeable move past verification (review fix)', () => {
+    const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush();
+    const forged = structuredClone(w.pub); forged.version += 1; forged.turn = 'w'; forged.pieces.b12.square = 'c5';
+    forged.lastMove = { from: 'e7', to: 'c5', pieceId: 'b12', capturedId: null, challengeable: true, moverMoved: false, capturedMoved: null };
+    forged.log = [...forged.log, { k: 'move', from: 'e7', to: 'c5', pieceId: 'b12', capturedId: null, moverMoved: true, capturedMoved: null }];
+    expect(w.syncFrom(forged)).toBe(true); expect(w.canChallenge()).toBe(false);
+    w.resign(); w.receive({ t: 'setup', gen: 0, ids: standardIdentity('b'), salt: b.salt });
+    expect(w.verification()).toEqual({ ok: false, why: 'first-move', ply: 1 });
+  });
+  it('a board that does not match the move log is reported, not verified (review fix)', () => {
+    const { w, b, start } = pair(); start(); w.move('e2', 'e4');
+    const forged = structuredClone(w.pub); forged.version += 1; forged.pieces.b12.square = 'c5'; // teleport with no log entry
+    expect(w.syncFrom(forged)).toBe(true); expect(w.logTainted).toBe(false);
+    w.resign(); w.receive({ t: 'setup', gen: 0, ids: standardIdentity('b'), salt: b.salt });
+    expect(w.verification()).toEqual({ ok: false, why: 'log', ply: 2 }); // reported at the end of the log (move, resign)
+  });
+  it('a commitment mismatch is reported even when the log was tainted (review fix)', () => {
+    const { w, b, start } = pair(); start(); w.move('e2', 'e4');
+    const older = structuredClone(w.pub); delete older.log; older.version += 1; w.syncFrom(older); expect(w.logTainted).toBe(true);
+    w.resign(); w.receive({ t: 'setup', gen: 0, ids: { ...standardIdentity('b'), b0: 'n', b1: 'r' }, salt: b.salt });
+    expect(w.verification()).toEqual({ ok: false, why: 'commitment' });
+  });
 });
