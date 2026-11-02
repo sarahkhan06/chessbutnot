@@ -6,8 +6,12 @@ import {
 } from './rules/state.js';
 import { TYPES, destinations } from './rules/geometry.js';
 import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, legalDestinations, isValidIdentity } from './rules/identity.js';
+import { commitment, verify } from './rules/verify.js';
 
 const other = (c) => (c === 'w' ? 'b' : 'w');
+const randomSalt = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (x) => x.toString(16).padStart(2, '0')).join('');
+// Our log must be a prefix of a synced one; anything else is a rewritten past.
+const isPrefix = (mine, theirs) => mine.length <= theirs.length && mine.every((e, i) => JSON.stringify(e) === JSON.stringify(theirs[i]));
 
 // Seats never change; colours alternate with the generation so rematches swap sides.
 export const colorFor = (seat, gen) => ((seat === 'host') === (gen % 2 === 0) ? 'w' : 'b');
@@ -45,6 +49,10 @@ export class Game {
     this.initial = structuredClone(this.priv); // identities as arranged in setup, kept for the end-of-game reveal
     this.setups = { w: null, b: null };        // the other player's arrangement, received once the game is over
     this.setupShared = false;
+    // Fairness (online): we commit to our arrangement when readying up and reveal the salt at game over.
+    // The opponent's commitment is private and write-once so a resync can never replace it.
+    this.salt = this.me ? randomSalt() : null;
+    this.commit = null; this.oppCommit = null; this.oppSalt = null; this.logTainted = false;
   }
 
   owns(color) { return this.me === null || this.me === color; }
@@ -64,8 +72,20 @@ export class Game {
     const ids = this.initial?.[this.me];
     if (!ids) return;
     this.setupShared = true;
-    this.send({ t: 'setup', gen: this.pub.gen, ids });
+    this.send({ t: 'setup', gen: this.pub.gen, ids, salt: this.salt });
   }
+
+  // What we can say about the opponent's honesty once they have revealed their setup (null until then).
+  verification() {
+    const opp = this.me && other(this.me);
+    if (!opp || !this.setups[opp]) return null;
+    if (this.logTainted) return { ok: null, why: 'diverged' };
+    if (!this.oppCommit) return { ok: null, why: 'no-commit' };
+    if (!this.oppSalt || commitment(opp, this.setups[opp], this.oppSalt) !== this.oppCommit) return { ok: false, why: 'commitment' };
+    return verify(this.pub.log, this.setups[opp], opp);
+  }
+
+  rememberCommit(commit) { if (typeof commit === 'string' && !this.oppCommit) this.oppCommit = commit; }
 
   // Each side's arrangement from before move one, or null if not known (yet).
   startingSetup() {
@@ -100,7 +120,7 @@ export class Game {
   readyUp(color) {
     if (this.pub.phase !== 'setup' || this.pub.stage[color] === 'ready') return;
     this.pub = setStage(this.pub, color, 'ready');
-    if (this.me) this.send({ t: 'ready' });
+    if (this.me) { this.commit = commitment(this.me, this.priv[this.me], this.salt); this.send({ t: 'ready', commit: this.commit }); }
     else if (color === 'w') this.setupColor = 'b';
     this.tryStart();
     this.changed();
@@ -267,6 +287,7 @@ export class Game {
     switch (msg.t) {
       case 'ready': {
         if (pub.phase !== 'setup' || pub.stage[opp] === 'ready') return false;
+        this.rememberCommit(msg.commit);
         this.pub = setStage(pub, opp, 'ready');
         this.tryStart();
         return true;
@@ -329,6 +350,7 @@ export class Game {
         if (msg.gen !== undefined && msg.gen !== pub.gen) return false;
         if (!isValidIdentity(msg.ids, opp)) return false;
         this.setups[opp] = { ...msg.ids };
+        this.oppSalt = typeof msg.salt === 'string' ? msg.salt : null;
         return true;
       }
       case 'resign': {
@@ -371,7 +393,7 @@ export class Game {
 
   // ---- reconnect handshake ----
   helloMessage() {
-    return { t: 'hello', gen: this.pub.gen, version: this.pub.version, ready: this.pub.stage[this.me] === 'ready' };
+    return { t: 'hello', gen: this.pub.gen, version: this.pub.version, ready: this.pub.stage[this.me] === 'ready', commit: this.commit };
   }
 
   // Newer = higher generation, or same generation and higher version.
@@ -383,12 +405,18 @@ export class Game {
   onHello(msg) {
     if (!msg || typeof msg.version !== 'number') return null;
     const gen = msg.gen ?? 0;
+    if (gen === this.pub.gen) this.rememberCommit(msg.commit);
     if (gen === this.pub.gen && this.pub.phase === 'setup' && msg.ready) this.receive({ t: 'ready' });
     return this.isNewerThan(gen, msg.version) ? { t: 'sync', pub: this.pub } : null;
   }
 
   // ---- persistence and sync ----
-  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, seat: this.seat, setupColor: this.setupColor, lastMoverType: this.lastMoverType, initial: this.initial, setups: this.setups }; }
+  snapshot() {
+    return {
+      pub: this.pub, priv: this.priv, me: this.me, seat: this.seat, setupColor: this.setupColor, lastMoverType: this.lastMoverType,
+      initial: this.initial, setups: this.setups, salt: this.salt, commit: this.commit, oppCommit: this.oppCommit, oppSalt: this.oppSalt, logTainted: this.logTainted,
+    };
+  }
 
   static isSnapshot(data) {
     if (!data || typeof data !== 'object') return false;
@@ -401,10 +429,14 @@ export class Game {
 
   static restore(data, { send, onChange } = {}) {
     const g = new Game({ seat: seatOf(data), send, onChange });
-    g.pub = scrub({ ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] });
+    g.pub = scrub({
+      ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null,
+      history: Array.isArray(data.pub.history) ? data.pub.history : [], log: Array.isArray(data.pub.log) ? data.pub.log : [], drawOffer: data.pub.drawOffer ?? null,
+    });
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     g.initial = data.initial ?? (g.pub.phase === 'setup' ? structuredClone(g.priv) : null);
     g.setups = data.setups ?? { w: null, b: null };
+    g.salt = data.salt ?? g.salt; g.commit = data.commit ?? null; g.oppCommit = data.oppCommit ?? null; g.oppSalt = data.oppSalt ?? null; g.logTainted = !!data.logTainted;
     return g;
   }
 
@@ -415,7 +447,10 @@ export class Game {
     if (gen > this.pub.gen) this.reset(gen); // a new game we never heard about: fresh identities
     else if (this.me && pub.stage?.[this.me] === 'ready' && this.pub.stage[this.me] !== 'ready') this.lostState = true;
     const before = this.pub;
-    this.pub = scrub(structuredClone(pub));
+    const incoming = structuredClone(pub);
+    incoming.log = Array.isArray(incoming.log) ? incoming.log : []; incoming.drawOffer = incoming.drawOffer ?? null;
+    if (!isPrefix(before.log || [], incoming.log)) this.logTainted = true;
+    this.pub = scrub(incoming);
     // Apply any pawn transformations whose `captured` message we never saw.
     if (this.me) {
       const opp = other(this.me);
