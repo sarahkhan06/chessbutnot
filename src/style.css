@@ -60,8 +60,8 @@ h1{margin:0;font-size:.95rem;font-weight:600;letter-spacing:.18em;text-transform
 
 .captured{min-height:30px;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
 .captured span{width:26px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:18px;line-height:1}
-.captured span.own{background:linear-gradient(160deg,var(--own),var(--own2));color:var(--own-ink);box-shadow:0 1px 0 #b9ae97}
-.captured span.foe{background:var(--foe);color:var(--ink);border:1px solid var(--foe-line)}
+.captured span.w{background:linear-gradient(160deg,var(--own),var(--own2));color:var(--own-ink);box-shadow:0 1px 0 #b9ae97}
+.captured span.b{background:var(--foe);color:var(--ink);border:1px solid var(--foe-line)}
 .captured span.pending{color:var(--faint);font-weight:700}
 
 .stage{padding:2px 0}
@@ -87,14 +87,16 @@ h1{margin:0;font-size:.95rem;font-weight:600;letter-spacing:.18em;text-transform
 
 .card{position:absolute;inset:9%;border-radius:18%;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,8.2vw,46px);line-height:1;pointer-events:none;z-index:1;transition:transform .12s ease}
 .sq.sel .card{transform:translateY(-4%) scale(1.04)}
-.card.own{background:linear-gradient(160deg,var(--own),var(--own2));color:var(--own-ink);box-shadow:0 2px 0 #b9ae97,0 8px 14px -6px #0009}
-.card.foe{background:
-  repeating-linear-gradient(45deg,#ffffff07 0 3px,transparent 3px 7px),
-  linear-gradient(160deg,var(--foe2),var(--foe));
-  border:1px solid var(--foe-line);color:var(--ink);box-shadow:0 2px 0 #0a0b0e,0 8px 14px -6px #000c}
-.card.foe:empty::after{content:"";position:absolute;inset:16%;border-radius:14%;border:1px solid #ffffff12}
+/* Cards are coloured by side, so both players see the same pieces: White's are cream, Black's are dark. */
+.card.w{background:linear-gradient(160deg,var(--own),var(--own2));color:var(--own-ink);box-shadow:0 2px 0 #b9ae97,0 8px 14px -6px #0009}
+.card.b{background:linear-gradient(160deg,var(--foe2),var(--foe));border:1px solid var(--foe-line);color:var(--ink);box-shadow:0 2px 0 #0a0b0e,0 8px 14px -6px #000c}
+/* Hidden (opponent) pieces: hatched back, no glyph. Your own pieces: glyph plus a green base bar. */
+.card.foe.w{background:repeating-linear-gradient(45deg,#00000014 0 3px,transparent 3px 7px),linear-gradient(160deg,var(--own),var(--own2))}
+.card.foe.b{background:repeating-linear-gradient(45deg,#ffffff0d 0 3px,transparent 3px 7px),linear-gradient(160deg,var(--foe2),var(--foe))}
+.card.foe:empty::after{content:"";position:absolute;inset:16%;border-radius:14%;border:1px solid #0000002e}
+.card.foe.b:empty::after{border-color:#ffffff22}
+.card.own::after{content:"";position:absolute;left:24%;right:24%;bottom:8%;height:3px;border-radius:3px;background:var(--sel)}
 .card.exposed::before{content:"";position:absolute;top:7%;right:8%;width:17%;height:17%;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--foe)}
-.card.foe.exposed{background:linear-gradient(160deg,#2c2f3a,#20232b)}
 
 .replay{display:flex;align-items:center;justify-content:center;gap:6px}
 .replay.hidden{display:none}

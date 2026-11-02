@@ -123,8 +123,8 @@ export function render(game, ui, onClick) {
           board.appendChild(el);
           continue;
         }
-        if (blind) { c.className = 'card foe'; el.appendChild(c); el.onclick = () => onClick(sqName); board.appendChild(el); continue; }
-        c.className = 'card ' + (own ? 'own' : 'foe');
+        if (blind) { c.className = 'card foe ' + p.color; el.appendChild(c); el.onclick = () => onClick(sqName); board.appendChild(el); continue; }
+        c.className = 'card ' + p.color + ' ' + (own ? 'own' : 'foe');
         if (own) c.textContent = GLYPH[game.priv[v][id]];
         else if (fu) c.textContent = GLYPH[fu];
         if (fu) c.classList.add('exposed');
@@ -140,7 +140,7 @@ export function render(game, ui, onClick) {
     const t = $(elId); t.innerHTML = '';
     for (const e of pub.lost[color]) {
       const s = document.createElement('span');
-      s.className = color === v ? 'own' : 'foe';
+      s.className = color; // coloured by side, like the cards on the board
       if (e.type) s.textContent = GLYPH[e.type]; else { s.textContent = '?'; s.classList.add('pending'); }
       t.appendChild(s);
     }
