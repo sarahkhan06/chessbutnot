@@ -21,6 +21,7 @@ main{width:100%;padding:14px 16px 8px;display:flex;flex-direction:column;gap:8px
 .msg{max-width:85%;padding:7px 11px;border-radius:14px;font-size:.9rem;line-height:1.35;word-break:break-word;white-space:pre-wrap}
 .msg.me{align-self:flex-end;background:var(--ink);color:var(--own-ink);border-bottom-right-radius:4px}
 .msg.them{align-self:flex-start;background:#2a2e38;color:var(--ink);border-bottom-left-radius:4px}
+.msg.pending{opacity:.55}
 .chat-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
 .chat-form input{flex:1;min-width:0;padding:9px 12px;border-radius:99px;border:1px solid var(--line);background:#0f1115;color:var(--ink);font:inherit;font-size:.9rem}
 .chat-form input:focus{outline:none;border-color:#ffffff33}
@@ -101,6 +102,8 @@ h1{margin:0;font-size:.95rem;font-weight:600;letter-spacing:.18em;text-transform
 .replay.reviewing span{color:var(--accent);font-weight:600}
 .board.review{box-shadow:0 0 0 2px var(--accent),0 30px 60px -24px #000d,0 10px 24px -12px #0009}
 .controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:2px}
+.pill-btn{align-self:center;padding:6px 12px;font-size:.78rem}
+.pill-btn.hidden{display:none}
 .banner{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:14px;background:var(--panel);border:1px solid var(--line);font-size:.9rem}
 .banner.hidden{display:none}
 .banner button{padding:7px 14px;font-size:.85rem}

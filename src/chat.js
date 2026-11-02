@@ -22,3 +22,9 @@ export function appendChat(log, entry) {
   const next = [...log, { text: entry.text, from: entry.from, ts: entry.ts }];
   return next.length > MAX_CHAT ? next.slice(next.length - MAX_CHAT) : next;
 }
+
+// Send queued messages in order; stop at the first one the transport refuses and return the rest.
+export function flushOutbox(outbox, send) {
+  for (let i = 0; i < outbox.length; i++) if (!send(outbox[i])) return outbox.slice(i);
+  return [];
+}

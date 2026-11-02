@@ -1,7 +1,7 @@
 import { Game, seatOf } from './game.js';
 import { connect } from './net.js';
 import { saveGame, loadGame, clearGame, saveChat, loadChat } from './storage.js';
-import { chatMessage, isChatMessage, appendChat, isMine } from './chat.js';
+import { chatMessage, isChatMessage, appendChat, isMine, flushOutbox } from './chat.js';
 import { render, name } from './render.js';
 import { pieceAt } from './rules/state.js';
 
@@ -11,6 +11,9 @@ let game, net = null, room = null, seat = null, confirmTimer = null; // seat: 'h
 const online = () => seat !== null;
 const ui = { selected: null, dests: [], connection: null, confirm: null, showBluffHint: false, passing: false, viewPly: null, showStart: false, overSeen: false };
 let chat = [];
+let outbox = [];                 // chat typed while disconnected, sent in order once the link is back
+const unsent = new Set();        // ts of messages still in the outbox
+let chatVisible = true;
 
 // ---- rendering and persistence ----
 function draw() { render(game, ui, click); }
@@ -158,7 +161,14 @@ const restart = () => {
 $('new').onclick = () => { if (game.pub.phase === 'play') confirmTap('new', restart); else restart(); };
 $('over-toggle').onclick = () => { ui.showStart = !ui.showStart; draw(); };
 $('over-btn').onclick = restart;
-$('copy').onclick = () => { $('link').select(); navigator.clipboard?.writeText($('link').value); $('copy').textContent = 'Copied!'; };
+$('copy').onclick = () => {
+  $('link').select(); navigator.clipboard?.writeText($('link').value);
+  $('copy').textContent = 'Copied!'; setTimeout(() => { $('copy').textContent = 'Copy link'; }, 1500);
+};
+if (typeof navigator.share === 'function') {
+  $('share').classList.remove('hidden');
+  $('share').onclick = () => navigator.share({ title: 'Hidden Identity Chess', text: 'Play me at Hidden Identity Chess', url: $('link').value }).catch(() => {});
+}
 
 // ---- chat (online only) ----
 function drawChat() {
@@ -166,7 +176,7 @@ function drawChat() {
   log.innerHTML = '';
   for (const m of chat) {
     const el = document.createElement('div');
-    el.className = 'msg ' + (isMine(m, seat) ? 'me' : 'them');
+    el.className = 'msg ' + (isMine(m, seat) ? 'me' : 'them') + (unsent.has(m.ts) ? ' pending' : '');
     el.textContent = m.text;
     el.title = new Date(m.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     log.appendChild(el);
@@ -179,19 +189,30 @@ $('chat-form').onsubmit = (e) => {
   const m = chatMessage($('chat-input').value, seat);
   if (!m || !online()) return;
   $('chat-input').value = '';
-  send(m);
+  if (!send(m)) { outbox.push(m); unsent.add(m.ts); }
   addChat(m);
 };
+function flushChat() {
+  outbox = flushOutbox(outbox, send);
+  const still = new Set(outbox.map((m) => m.ts));
+  for (const ts of [...unsent]) if (!still.has(ts)) unsent.delete(ts);
+  drawChat();
+}
+// Narrow layout: the chat sits below the board, so flag messages that arrive while it is off screen.
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(([en]) => { chatVisible = en.isIntersecting; if (chatVisible) $('chat-new').classList.add('hidden'); }, { threshold: 0.2 }).observe($('chat-log'));
+}
+$('chat-new').onclick = () => { $('chat').scrollIntoView({ behavior: 'smooth', block: 'end' }); $('chat-new').classList.add('hidden'); };
 
 // ---- online ----
 const send = (m) => { net?.send(m); };
 function onStatus(status, detail) { ui.connection = { status, detail }; draw(); }
-function onOpen() { send(game.helloMessage()); }
+function onOpen() { send(game.helloMessage()); flushChat(); }
 function resendOutstanding() { const o = game.outstanding(); if (o) send(o); }
 function onMessage(m) {
   if (m.t === 'hello') { const sync = game.onHello(m); if (sync) send(sync); resendOutstanding(); game.shareSetup(true); }
   else if (m.t === 'sync') { game.syncFrom(m.pub); resendOutstanding(); game.shareSetup(true); }
-  else if (m.t === 'chat') { if (isChatMessage(m, seat)) addChat(m); }
+  else if (m.t === 'chat') { if (isChatMessage(m, seat)) { addChat(m); if (!chatVisible) $('chat-new').classList.remove('hidden'); } }
   else game.receive(m);
 }
 

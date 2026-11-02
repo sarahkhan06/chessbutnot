@@ -23,6 +23,7 @@
     <button id="rw-prev" title="Show the position before the last move" aria-label="Show previous position">◀</button>
     <span id="rw-label"></span>
   </div>
+  <button id="chat-new" class="pill-btn hidden">New message ↓</button>
   <div id="draw-banner" class="banner hidden"><span>Opponent offers a draw</span><button id="draw-accept" class="primary">Accept</button><button id="draw-decline">Decline</button></div>
   <div class="controls">
     <button id="challenge" class="warn hidden">Challenge last move</button>
@@ -31,7 +32,7 @@
     <button id="online">Play online</button>
     <button id="new">New game</button>
   </div>
-  <div id="invite" class="invite hidden"><input id="link" readonly /><button id="copy" class="primary">Copy link</button></div>
+  <div id="invite" class="invite hidden"><input id="link" readonly /><button id="copy" class="primary">Copy link</button><button id="share" class="hidden">Share</button></div>
   <p class="hint" id="hint">Your pieces face you, theirs are blank. A piece's first move must be honest; after that it may move like anything. A caught bluff costs you that piece and one more; a wrong challenge costs you a piece of their choosing.</p>
   <p class="hint bluff-hint hidden" id="bluff-hint">Amber squares are bluffs: moving there breaks your piece's real rules.</p>
 </main>

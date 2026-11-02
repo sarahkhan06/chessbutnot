@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chatMessage, isChatMessage, appendChat, MAX_CHAT, MAX_TEXT } from '../src/chat.js';
+import { chatMessage, isChatMessage, appendChat, flushOutbox, MAX_CHAT, MAX_TEXT } from '../src/chat.js';
 import { saveChat, loadChat } from '../src/storage.js';
 
 describe('chat', () => {
@@ -34,5 +34,10 @@ describe('chat', () => {
     const broken = { getItem() { throw new Error('x'); }, setItem() { throw new Error('x'); } };
     expect(() => saveChat('r', [], broken)).not.toThrow(); expect(loadChat('r', broken)).toEqual([]);
     expect(loadChat('r3', { getItem: () => '{"not":"array"}' })).toEqual([]);
+  });
+  it('flushOutbox sends in order and returns what could not be sent', () => {
+    const sent = []; const msgs = [{ text: 'a' }, { text: 'b' }, { text: 'c' }];
+    expect(flushOutbox(msgs, (m) => { sent.push(m.text); return true; })).toEqual([]); expect(sent).toEqual(['a', 'b', 'c']);
+    let n = 0; expect(flushOutbox(msgs, () => ++n < 2)).toEqual([{ text: 'b' }, { text: 'c' }]);
   });
 });
