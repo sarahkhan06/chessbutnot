@@ -31,7 +31,6 @@ Two players, either online over a peer-to-peer connection or hot-seat on one scr
 - Reconnect and refresh safety: games are saved per room in `localStorage` and resynced with the peer.
 - In-game chat over the same peer connection.
 - Move history with a previous-position toggle.
-- Mirror the board to play from either side.
 
 ## Running locally
 

@@ -46,7 +46,7 @@ export function render(game, ui, onClick) {
   const destMap = new Map((ui.dests || []).map((d) => [d.to, d.legal]));
   const pickMode = play && pub.pending === 'penaltyPick' && pub.picker === v;
   const editable = setup && pub.stage[v] === 'arranging';
-  const reveal = ui.mirror && !online && play;
+  const blind = !!ui.passing; // hand-over screen is up: show nothing the next player should not see
 
   // Rewind: show the board as it was after history entry ui.viewPly instead of the live position.
   const hist = pub.history || [];
@@ -74,13 +74,13 @@ export function render(game, ui, onClick) {
       el.className = 'sq' + ((file + rank) % 2 ? ' dk' : '');
       el.dataset.sq = sqName;
       if (hl && (hl.from === sqName || hl.to === sqName)) el.classList.add('last');
-      if (!viewing && sqName === ui.selected) el.classList.add('sel');
-      if (!viewing && destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');
+      if (!viewing && !blind && sqName === ui.selected) el.classList.add('sel');
+      if (!viewing && !blind && destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');
       const id = at(sqName);
       if (id) el.classList.add('occ');
       if (ri === 7) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = FILES[file]; el.appendChild(c); }
       if (fi === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank; el.appendChild(c); }
-      if (!viewing && editable && id && pub.pieces[id].color === v) el.classList.add('edit');
+      if (!viewing && !blind && editable && id && pub.pieces[id].color === v) el.classList.add('edit');
       if (id) {
         const p = pub.pieces[id];
         const own = p.color === v;
@@ -95,10 +95,10 @@ export function render(game, ui, onClick) {
           board.appendChild(el);
           continue;
         }
+        if (blind) { c.className = 'card foe'; el.appendChild(c); el.onclick = () => onClick(sqName); board.appendChild(el); continue; }
         c.className = 'card ' + (own ? 'own' : 'foe');
         if (own) c.textContent = GLYPH[game.priv[v][id]];
         else if (fu) c.textContent = GLYPH[fu];
-        else if (reveal) { c.textContent = GLYPH[game.priv[p.color][id]]; c.classList.add('rev'); }
         if (fu) c.classList.add('exposed');
         if (!viewing && pickMode && !own) el.classList.add('pickable');
         el.appendChild(c);
@@ -158,9 +158,8 @@ export function render(game, ui, onClick) {
   const debut = game.canAct() && !!pub.lastMove?.challengeable && !pub.lastMove.moverMoved;
   ch.classList.toggle('hidden', (!game.canChallenge() && !debut) || game.lostState);
   ch.disabled = debut;
-  ch.textContent = debut ? 'First move — always honest' : ui.confirmChallenge ? 'Challenge — sure?' : 'Challenge last move';
-  if (ui.confirmChallenge) ch.dataset.confirm = '1'; else delete ch.dataset.confirm;
-  $('mirror').style.display = !online && play ? '' : 'none';
+  ch.textContent = debut ? 'First move — always honest' : ui.confirm === 'challenge' ? 'Challenge — sure?' : 'Challenge last move';
+  if (ui.confirm === 'challenge') ch.dataset.confirm = '1'; else delete ch.dataset.confirm;
   $('online').style.display = online ? 'none' : '';
   $('bluff-hint').classList.toggle('hidden', !ui.showBluffHint);
 

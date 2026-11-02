@@ -8,7 +8,7 @@ import { pieceAt } from './rules/state.js';
 const $ = (id) => document.getElementById(id);
 
 let game, net = null, room = null, me = null, confirmTimer = null;
-const ui = { selected: null, dests: [], connection: null, mirror: false, confirmChallenge: false, showBluffHint: false, passing: false, viewPly: null, showStart: false, overSeen: false };
+const ui = { selected: null, dests: [], connection: null, confirm: null, showBluffHint: false, passing: false, viewPly: null, showStart: false, overSeen: false };
 let chat = [];
 
 // ---- rendering and persistence ----
@@ -60,7 +60,7 @@ function click(sq) {
   if (ui.selected && ui.dests.some((d) => d.to === sq)) {
     const from = ui.selected;
     clearSelection();
-    ui.confirmChallenge = false;
+    ui.confirm = null;
     game.move(from, sq);
     if (!me && game.pub.phase === 'play') showPass();
     return;
@@ -97,13 +97,13 @@ $('skip').onclick = () => { clearSelection(); const v = game.viewer(); game.useS
 // ---- challenge (two taps) ----
 $('challenge').onclick = () => {
   clearTimeout(confirmTimer);
-  if (!ui.confirmChallenge) {
-    ui.confirmChallenge = true;
+  if (ui.confirm !== 'challenge') {
+    ui.confirm = 'challenge';
     draw();
-    confirmTimer = setTimeout(() => { ui.confirmChallenge = false; draw(); }, 4000);
+    confirmTimer = setTimeout(() => { ui.confirm = null; draw(); }, 4000);
     return;
   }
-  ui.confirmChallenge = false;
+  ui.confirm = null;
   clearSelection();
   const challenger = game.viewer();
   game.challenge();
@@ -127,9 +127,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---- misc buttons ----
-$('mirror').onclick = () => { ui.mirror = !ui.mirror; draw(); };
 const restart = () => {
-  clearSelection(); ui.mirror = false; ui.confirmChallenge = false;
+  clearSelection(); ui.confirm = null;
   if (room && me) clearGame(room, me);
   game.newGame();
 };
