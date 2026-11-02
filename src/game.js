@@ -9,6 +9,11 @@ import { standardIdentity, swapIdentity, promote, transform, isLastMoveLegal, le
 
 const other = (c) => (c === 'w' ? 'b' : 'w');
 
+// Seats never change; colours alternate with the generation so rematches swap sides.
+export const colorFor = (seat, gen) => ((seat === 'host') === (gen % 2 === 0) ? 'w' : 'b');
+// Seat of a saved game. Saves from before seats existed carry only a colour; the host was White on even generations.
+export const seatOf = (data) => data.seat ?? ((data.me === 'w') === ((data.pub?.gen ?? 0) % 2 === 0) ? 'host' : 'guest');
+
 // Identities are never public mid-game, so drop any face-up marks (and the type on a 'legal'
 // history entry) that an older version of the game, a saved game or a peer might still carry.
 function scrub(pub) {
@@ -21,8 +26,9 @@ function scrub(pub) {
 }
 
 export class Game {
-  constructor({ me = null, send = () => {}, onChange = () => {} } = {}) {
-    this.me = me;
+  constructor({ me = null, seat = null, send = () => {}, onChange = () => {} } = {}) {
+    this.seat = seat ?? (me === 'w' ? 'host' : me === 'b' ? 'guest' : null);
+    this.me = this.seat ? colorFor(this.seat, 0) : null;
     this.send = send;
     this.onChange = onChange;
     this.reset();
@@ -31,6 +37,7 @@ export class Game {
   reset(gen = (this.pub?.gen ?? -1) + 1) {
     this.pub = createState();
     this.pub.gen = gen;
+    if (this.seat) this.me = colorFor(this.seat, gen);
     this.priv = { w: this.owns('w') ? standardIdentity('w') : null, b: this.owns('b') ? standardIdentity('b') : null };
     this.setupColor = 'w';
     this.lastMoverType = null; // identity of the last moved piece *before* promotion, if we own it
@@ -381,7 +388,7 @@ export class Game {
   }
 
   // ---- persistence and sync ----
-  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, setupColor: this.setupColor, lastMoverType: this.lastMoverType, initial: this.initial, setups: this.setups }; }
+  snapshot() { return { pub: this.pub, priv: this.priv, me: this.me, seat: this.seat, setupColor: this.setupColor, lastMoverType: this.lastMoverType, initial: this.initial, setups: this.setups }; }
 
   static isSnapshot(data) {
     if (!data || typeof data !== 'object') return false;
@@ -393,7 +400,7 @@ export class Game {
   }
 
   static restore(data, { send, onChange } = {}) {
-    const g = new Game({ me: data.me, send, onChange });
+    const g = new Game({ seat: seatOf(data), send, onChange });
     g.pub = scrub({ ...data.pub, gen: data.pub.gen ?? 0, penaltyId: data.pub.penaltyId ?? null, pending: data.pub.pending ?? null, picker: data.pub.picker ?? null, history: Array.isArray(data.pub.history) ? data.pub.history : [] });
     g.priv = data.priv; g.setupColor = data.setupColor ?? 'w'; g.lastMoverType = data.lastMoverType ?? null;
     g.initial = data.initial ?? (g.pub.phase === 'setup' ? structuredClone(g.priv) : null);

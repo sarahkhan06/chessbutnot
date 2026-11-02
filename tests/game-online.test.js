@@ -116,7 +116,7 @@ describe('Game online', () => {
 
   it('new message resets the other side to setup', () => {
     const { w, b, flush, start } = pair(); start(); w.move('e2', 'e4'); flush(); w.resign(); flush(); w.newGame(); flush();
-    expect(b.pub.phase).toBe('setup'); expect(b.pub.pieces.w12.square).toBe('e2'); expect(b.priv.b.b4).toBe('k');
+    expect(b.pub.phase).toBe('setup'); expect(b.pub.pieces.w12.square).toBe('e2'); expect(b.me).toBe('w'); expect(b.priv.w.w4).toBe('k'); // the guest is White next game
   });
 
   it('syncFrom applies a pawn transformation whose captured message was lost', () => {

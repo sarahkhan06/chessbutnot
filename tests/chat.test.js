@@ -4,17 +4,18 @@ import { saveChat, loadChat } from '../src/storage.js';
 
 describe('chat', () => {
   it('chatMessage trims, caps length, and rejects empty text', () => {
-    expect(chatMessage('  hi  ', 'w', 5)).toEqual({ t: 'chat', text: 'hi', from: 'w', ts: 5 });
-    expect(chatMessage('   ', 'w', 5)).toBeNull();
-    expect(chatMessage('x'.repeat(MAX_TEXT + 50), 'b', 1).text.length).toBe(MAX_TEXT);
+    expect(chatMessage('  hi  ', 'host', 5)).toEqual({ t: 'chat', text: 'hi', from: 'host', ts: 5 });
+    expect(chatMessage('   ', 'host', 5)).toBeNull();
+    expect(chatMessage('x'.repeat(MAX_TEXT + 50), 'guest', 1).text.length).toBe(MAX_TEXT);
   });
   it('isChatMessage validates shape and sender', () => {
-    expect(isChatMessage({ t: 'chat', text: 'yo', from: 'w', ts: 1 }, 'b')).toBe(true);
-    expect(isChatMessage({ t: 'chat', text: 'yo', from: 'b', ts: 1 }, 'b')).toBe(false); // claims to be me
-    expect(isChatMessage({ t: 'chat', text: '', from: 'b', ts: 1 }, 'b')).toBe(false);
-    expect(isChatMessage({ t: 'chat', text: 'x'.repeat(MAX_TEXT + 1), from: 'b', ts: 1 }, 'b')).toBe(false);
-    expect(isChatMessage({ t: 'move', text: 'yo', from: 'b', ts: 1 }, 'b')).toBe(false);
-    expect(isChatMessage(null, 'b')).toBe(false);
+    expect(isChatMessage({ t: 'chat', text: 'yo', from: 'host', ts: 1 }, 'guest')).toBe(true);
+    expect(isChatMessage({ t: 'chat', text: 'yo', from: 'guest', ts: 1 }, 'guest')).toBe(false); // claims to be me
+    expect(isChatMessage({ t: 'chat', text: 'yo', from: 'w', ts: 1 }, 'guest')).toBe(false); // colours are not seats
+    expect(isChatMessage({ t: 'chat', text: '', from: 'host', ts: 1 }, 'guest')).toBe(false);
+    expect(isChatMessage({ t: 'chat', text: 'x'.repeat(MAX_TEXT + 1), from: 'host', ts: 1 }, 'guest')).toBe(false);
+    expect(isChatMessage({ t: 'move', text: 'yo', from: 'host', ts: 1 }, 'guest')).toBe(false);
+    expect(isChatMessage(null, 'guest')).toBe(false);
   });
   it('appendChat keeps only the newest MAX_CHAT entries and never mutates', () => {
     const log = [];

@@ -7,13 +7,16 @@ export function chatMessage(text, from, ts = Date.now()) {
   return clean ? { t: 'chat', text: clean, from, ts } : null;
 }
 
-// Valid when it comes from the opponent (never claims to be us).
-export function isChatMessage(msg, me) {
+// Valid when it comes from the opponent's seat (never claims to be us). Seats, not colours: colours swap on rematch.
+export function isChatMessage(msg, mySeat) {
   return !!msg && typeof msg === 'object' && msg.t === 'chat'
     && typeof msg.text === 'string' && msg.text.trim().length > 0 && msg.text.length <= MAX_TEXT
-    && (msg.from === 'w' || msg.from === 'b') && msg.from !== me
+    && (msg.from === 'host' || msg.from === 'guest') && msg.from !== mySeat
     && typeof msg.ts === 'number';
 }
+
+// Logs saved before seats existed carry colours; every such game was generation 0, where host was White.
+export const isMine = (m, mySeat) => m.from === mySeat || (m.from === 'w' && mySeat === 'host') || (m.from === 'b' && mySeat === 'guest');
 
 export function appendChat(log, entry) {
   const next = [...log, { text: entry.text, from: entry.from, ts: entry.ts }];

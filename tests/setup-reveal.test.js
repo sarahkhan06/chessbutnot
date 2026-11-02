@@ -54,7 +54,7 @@ describe('end-of-game reveal of the starting arrangements', () => {
     const snap = JSON.parse(JSON.stringify(w.snapshot()));
     const r = Game.restore(snap, {});
     expect(r.initial.w.w0).toBe('n');
-    w.newGame(); expect(w.initial.w.w0).toBe('r'); expect(w.setups).toEqual({ w: null, b: null });
+    w.newGame(); expect(w.me).toBe('b'); expect(w.initial.b.b0).toBe('r'); expect(w.initial.w).toBeNull(); expect(w.setups).toEqual({ w: null, b: null }); // colours swap on rematch
   });
 });
 

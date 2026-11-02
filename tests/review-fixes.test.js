@@ -50,13 +50,13 @@ describe('game generation (review fix 2)', () => {
     const { w, b, flush, start, queue } = pair(); b.swap('b', 'e8', 'a8'); start(); w.move('e2', 'e4'); flush();
     expect(b.priv.b.b0).toBe('k');
     b.newGame(); queue.length = 0;              // 'new' lost on the wire
-    expect(b.priv.b.b0).toBe('r');
+    expect(b.me).toBe('w'); expect(b.priv.w.w0).toBe('r'); expect(b.priv.b).toBeNull(); // b is White next game
     const hw = w.helloMessage(), hb = b.helloMessage();
     expect(w.onHello(hb)).toBeNull();           // w is gen 0, b is gen 1: b is newer
     const sync = b.onHello(hw); expect(sync).toMatchObject({ t: 'sync' });
     expect(w.pub.phase).toBe('play');
     w.syncFrom(sync.pub);
-    expect(w.pub.gen).toBe(1); expect(w.pub.phase).toBe('setup'); expect(w.priv.w.w4).toBe('k'); expect(w.lastMoverType).toBeNull();
+    expect(w.pub.gen).toBe(1); expect(w.pub.phase).toBe('setup'); expect(w.me).toBe('b'); expect(w.priv.b.b4).toBe('k'); expect(w.lastMoverType).toBeNull();
     expect(w.pub.pieces.w12.square).toBe('e2'); expect(w.pub.stage).toEqual({ w: 'arranging', b: 'arranging' });
   });
   it('a stale sync from an older generation is ignored', () => {
