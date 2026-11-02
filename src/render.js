@@ -17,6 +17,17 @@ export function historyLabel(e, i) {
   return '';
 }
 
+// One line on the over panel about the opponent's honesty, from Game.verification().
+const CLAIMS = { verdict: 'false verdict', bluff: 'false bluff reveal', captured: 'false capture reveal', penalty: 'false penalty reveal', 'first-move': 'dishonest first move' };
+export function verifyLine(v, log, online) {
+  if (!v) return online ? ['Waiting for the opponent’s reveal…', 'muted'] : ['', ''];
+  if (v.ok === true) return ['Opponent’s game verified', 'good'];
+  if (v.ok === null) return [v.why === 'diverged' ? 'States diverged on reconnect, so the opponent’s game could not be verified.' : 'Opponent sent no commitment, so their game could not be verified.', 'muted'];
+  if (v.why === 'commitment') return ['Opponent’s reveal does not match their commitment', 'bad'];
+  const n = (log || []).slice(0, v.ply + 1).filter((e) => e.k === 'move').length;
+  return [`Opponent lied on move ${n}: ${CLAIMS[v.why] || v.why}`, 'bad'];
+}
+
 export function overTitle(pub) {
   const loser = other(pub.winner);
   if (pub.reason === 'king-captured') return `${name(pub.winner)} captured the king`;
@@ -141,6 +152,7 @@ export function render(game, ui, onClick) {
     else if (pub.pending === 'penaltyPick') status = `${name(pub.picker)} is picking a penalty…`;
     else if (pub.pending === 'awaitVerdict') status = 'Waiting for verdict…';
     else if (pub.pending === 'awaitRemoved') status = 'Waiting…';
+    else if (online && pub.drawOffer === me) status = 'Draw offered — waiting for their answer';
     else if (online) {
       const theirs = pub.turn !== me;
       status = `You are ${name(me)} — ${theirs ? `waiting for ${name(pub.turn)}` : 'your move'}`;
@@ -162,6 +174,16 @@ export function render(game, ui, onClick) {
   ch.disabled = debut;
   ch.textContent = debut ? 'First move — always honest' : ui.confirm === 'challenge' ? 'Challenge — sure?' : 'Challenge last move';
   if (ui.confirm === 'challenge') ch.dataset.confirm = '1'; else delete ch.dataset.confirm;
+  // Resign, draw and new game: labels flip to "— sure?" on the first tap of a two-tap confirm.
+  const confirmable = (id, label, kind) => { const el = $(id); el.textContent = ui.confirm === kind ? `${label} — sure?` : label; if (ui.confirm === kind) el.dataset.confirm = '1'; else delete el.dataset.confirm; };
+  confirmable('resign', 'Resign', 'resign');
+  $('resign').style.display = play && !game.lostState ? '' : 'none';
+  const drawBtn = $('draw');
+  if (online) { drawBtn.textContent = 'Offer draw'; delete drawBtn.dataset.confirm; drawBtn.style.display = game.canOfferDraw() ? '' : 'none'; }
+  else { confirmable('draw', 'Agree draw', 'draw'); drawBtn.style.display = play ? '' : 'none'; }
+  $('draw-banner').classList.toggle('hidden', !(online && play && pub.drawOffer === other(me)));
+  confirmable('new', 'New game', 'new');
+  $('new').style.display = online && play ? 'none' : '';
   $('online').style.display = online ? 'none' : '';
   $('bluff-hint').classList.toggle('hidden', !ui.showBluffHint);
 
@@ -181,5 +203,7 @@ export function render(game, ui, onClick) {
     $('over-toggle').textContent = showingStart ? 'Show final position' : 'Show starting setups';
     const missing = showingStart && (!setups.w || !setups.b);
     $('over-note').textContent = showingStart ? (missing ? 'Waiting for the other player’s starting setup…' : 'Showing how each side arranged its pieces before move one.') : '';
+    const [text, cls] = verifyLine(game.verification(), pub.log, online);
+    $('over-verify').textContent = text; $('over-verify').className = 'verify ' + cls;
   }
 }

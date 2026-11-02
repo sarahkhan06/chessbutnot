@@ -27,3 +27,24 @@ describe('render', () => {
   });
   it('has no Mirror button', () => { expect(document.getElementById('mirror')).toBeNull(); });
 });
+
+describe('resign, draw and verification UI', () => {
+  beforeEach(mountPage);
+  const online = () => { const w = new Game({ me: 'w' }); const b = new Game({ me: 'b', send: (m) => w.receive(m) }); w.send = (m) => b.receive(m); w.readyUp('w'); b.readyUp('b'); return { w, b }; };
+  it('hot-seat shows Resign and Agree draw during play only', () => {
+    const g = new Game(); render(g, ui(), () => {});
+    expect(document.getElementById('resign').style.display).toBe('none');
+    const h = hotseat(); render(h, ui(), () => {});
+    expect(document.getElementById('resign').style.display).toBe(''); expect(document.getElementById('draw').textContent).toBe('Agree draw');
+  });
+  it('online: the draw banner appears for the receiver and the offerer is told to wait', () => {
+    const { w, b } = online(); w.offerDraw();
+    render(b, ui(), () => {}); expect(document.getElementById('draw-banner').classList.contains('hidden')).toBe(false);
+    render(w, ui(), () => {}); expect(document.getElementById('draw-banner').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('status').textContent).toMatch(/draw/i);
+  });
+  it('the over panel shows the verification result', () => {
+    const { w, b } = online(); w.resign();
+    render(b, ui(), () => {}); expect(document.getElementById('over-verify').textContent).toBe('Opponent’s game verified');
+  });
+});

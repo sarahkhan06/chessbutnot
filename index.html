@@ -23,8 +23,11 @@
     <button id="rw-prev" title="Show the position before the last move" aria-label="Show previous position">◀</button>
     <span id="rw-label"></span>
   </div>
+  <div id="draw-banner" class="banner hidden"><span>Opponent offers a draw</span><button id="draw-accept" class="primary">Accept</button><button id="draw-decline">Decline</button></div>
   <div class="controls">
     <button id="challenge" class="warn hidden">Challenge last move</button>
+    <button id="resign">Resign</button>
+    <button id="draw">Offer draw</button>
     <button id="online">Play online</button>
     <button id="new">New game</button>
   </div>
@@ -42,7 +45,7 @@
 </aside>
 </div>
 <div id="pass" class="pass hidden"><div><h2 id="pass-title"></h2><p>Hand the screen over, then tap.</p><button id="pass-btn">I'm ready</button></div></div>
-<div id="over" class="pass hidden"><div><h2 id="over-title"></h2><p id="over-note"></p><div class="row"><button id="over-toggle">Show final position</button><button id="over-btn" class="primary">Play again</button></div></div></div>
+<div id="over" class="pass hidden"><div><h2 id="over-title"></h2><p id="over-note"></p><p id="over-verify" class="verify"></p><div class="row"><button id="over-toggle">Show final position</button><button id="over-btn" class="primary">Play again</button></div></div></div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

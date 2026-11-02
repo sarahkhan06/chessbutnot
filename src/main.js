@@ -95,22 +95,30 @@ function afterReady(v) {
 $('ready').onclick = () => { const v = game.viewer(); game.readyUp(v); afterReady(v); };
 $('skip').onclick = () => { clearSelection(); const v = game.viewer(); game.useStandard(v); afterReady(v); };
 
-// ---- challenge (two taps) ----
-$('challenge').onclick = () => {
+// ---- two-tap confirmation shared by the irreversible buttons ----
+function confirmTap(kind, then) {
   clearTimeout(confirmTimer);
-  if (ui.confirm !== 'challenge') {
-    ui.confirm = 'challenge';
+  if (ui.confirm !== kind) {
+    ui.confirm = kind;
     draw();
     confirmTimer = setTimeout(() => { ui.confirm = null; draw(); }, 4000);
     return;
   }
   ui.confirm = null;
+  then();
+}
+
+$('challenge').onclick = () => confirmTap('challenge', () => {
   clearSelection();
   const challenger = game.viewer();
   game.challenge();
   // Hot-seat: a wrong challenge hands the screen to the mover to pick a penalty.
   if (!online() && game.pub.pending === 'penaltyPick' && game.pub.picker !== challenger) showPass(`${name(game.pub.picker)}: your move was honest — pick a penalty`);
-};
+});
+$('resign').onclick = () => confirmTap('resign', () => { clearSelection(); game.resign(); });
+$('draw').onclick = () => { if (online()) game.offerDraw(); else confirmTap('draw', () => { clearSelection(); game.agreeDraw(); }); };
+$('draw-accept').onclick = () => game.acceptDraw();
+$('draw-decline').onclick = () => game.declineDraw();
 
 // ---- previous position toggle ----
 function togglePrevious() {
@@ -133,7 +141,8 @@ const restart = () => {
   if (room && seat) clearGame(room, seat);
   game.newGame();
 };
-$('new').onclick = restart;
+// Mid-game a new game needs two taps; in setup or at game over it is immediate.
+$('new').onclick = () => { if (game.pub.phase === 'play') confirmTap('new', restart); else restart(); };
 $('over-toggle').onclick = () => { ui.showStart = !ui.showStart; draw(); };
 $('over-btn').onclick = restart;
 $('copy').onclick = () => { $('link').select(); navigator.clipboard?.writeText($('link').value); $('copy').textContent = 'Copied!'; };
