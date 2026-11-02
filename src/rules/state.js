@@ -17,6 +17,8 @@ function boardOf(s) {
   return { board, faceUp };
 }
 const record = (s, entry) => { s.history = [...s.history, { ...entry, ...boardOf(s) }].slice(-2); return s; };
+// Full append-only log of public events: never rendered, used to verify the opponent at game over.
+const logEvent = (s, e) => { s.log = [...(s.log || []), e]; return s; };
 
 // Where piece `id` (e.g. 'w12') stands before the first move.
 export function startSquare(id) {
@@ -37,7 +39,7 @@ export function createState() {
     stage: { w: 'arranging', b: 'arranging' },
     pieces, lost: { w: [], b: [] },
     lastMove: null, pending: null, penaltyId: null, picker: null,
-    winner: null, reason: null, history: [],
+    winner: null, reason: null, history: [], log: [], drawOffer: null,
   };
 }
 
@@ -76,6 +78,8 @@ export function applyMove(state, from, to) {
   s.pieces[id].moved = true;
   s.lastMove = lastMove;
   s.turn = other(state.turn);
+  s.drawOffer = null;
+  logEvent(s, { k: 'move', from, to, pieceId: id, capturedId: targetId, moverMoved: mover.moved, capturedMoved: lastMove.capturedMoved });
   return bump(record(s, { kind: 'move', from, to, capture: !!targetId }));
 }
 
@@ -86,7 +90,7 @@ export function acceptLastMove(state) {
 }
 
 function endGame(s, winner, reason) {
-  s.phase = 'over'; s.winner = winner; s.reason = reason; s.pending = null; s.penaltyId = null; s.picker = null;
+  s.phase = 'over'; s.winner = winner; s.reason = reason; s.pending = null; s.penaltyId = null; s.picker = null; s.drawOffer = null;
   return s;
 }
 
@@ -96,6 +100,7 @@ export function revealLost(state, id, type) {
   const entry = s.lost[color].find((e) => e.id === id);
   if (!entry) throw new Error(`${id} is not lost`);
   entry.type = type;
+  logEvent(s, { k: 'captured', id, type, by: entry.by });
   if (type === 'k') endGame(s, other(color), 'king-captured');
   return bump(s);
 }
@@ -105,7 +110,8 @@ export function resolveLegal(state) {
   const s = clone(state);
   s.lastMove.challengeable = false;
   // Wrong challenge: the mover removes one of the challenger's pieces.
-  s.pending = 'penaltyPick'; s.picker = s.pieces[s.lastMove.pieceId].color;
+  s.pending = 'penaltyPick'; s.picker = s.pieces[s.lastMove.pieceId].color; s.drawOffer = null;
+  logEvent(s, { k: 'legal' });
   return bump(record(s, { kind: 'legal', from: s.lastMove.from, to: s.lastMove.to }));
 }
 
@@ -121,6 +127,8 @@ export function resolveBluff(state, type) {
     s.lost[other(color)] = s.lost[other(color)].filter((e) => e.id !== capturedId);
   }
   s.lastMove.challengeable = false;
+  s.drawOffer = null;
+  logEvent(s, { k: 'bluff', pieceId, type });
   if (type === 'k') endGame(s, s.turn, 'king-bluffed');
   else { s.pending = 'penaltyPick'; s.picker = s.turn; }
   return bump(record(s, { kind: 'bluff', type, from: s.lastMove.from, to }));
@@ -132,7 +140,13 @@ export function applyPenalty(state, id, type) {
   const square = s.pieces[id].square;
   s.pieces[id].square = null;
   s.lost[color].push({ id, type, by: null });
-  s.pending = null; s.penaltyId = null; s.picker = null;
+  s.pending = null; s.penaltyId = null; s.picker = null; s.drawOffer = null;
+  logEvent(s, { k: 'penalty', id, type });
   if (type === 'k') endGame(s, other(color), 'king-penalty');
   return bump(record(s, { kind: 'penalty', type, from: null, to: square }));
 }
+
+export const resignGame = (state, color) => bump(logEvent(endGame(clone(state), other(color), 'resigned'), { k: 'resign', color }));
+export const agreeDraw = (state) => bump(logEvent(endGame(clone(state), null, 'draw'), { k: 'draw' }));
+export const offerDraw = (state, color) => bump({ ...clone(state), drawOffer: color });
+export const declineDraw = (state) => bump({ ...clone(state), drawOffer: null });
