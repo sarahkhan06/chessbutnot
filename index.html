@@ -12,7 +12,7 @@
 <div class="layout">
 <main>
   <header>
-    <div class="titlebar"><h1>Hidden Identity Chess</h1><span id="conn" class="conn hidden"></span></div>
+    <div class="titlebar"><h1>Hidden Identity Chess</h1><span class="titlebar-right"><button id="help-btn" class="ghost" aria-label="How to play">How to play</button><span id="conn" class="conn hidden"></span></span></div>
     <p id="status"></p>
   </header>
   <div id="setup" class="setup hidden"><div class="pill" id="pill"></div><p id="setup-hint"></p><div class="controls"><button id="skip" title="Keep the normal chess layout and ready up in one tap">Standard setup</button><button id="done" class="primary">Done</button><button id="ready" class="primary">Ready up</button></div></div>
@@ -44,6 +44,22 @@
   </form>
 </aside>
 </div>
+<dialog id="help" aria-labelledby="help-title">
+  <h2 id="help-title">How to play</h2>
+  <h3>Setup</h3>
+  <p>You have the usual sixteen pieces (♚ ♛ ♜ ♜ ♝ ♝ ♞ ♞ and eight ♟), but you arrange them across your two ranks however you like. Your opponent sees only blank cards.</p>
+  <h3>Moving</h3>
+  <p>Move a piece to any square <em>some</em> chess piece could reach from there. If that matches the piece’s true identity it is honest; anything else is a bluff. A piece’s first move must be honest.</p>
+  <h3>Pawns</h3>
+  <p>One square forward, two from the pawn rank on a first move, capture diagonally. A pawn that captures a non-pawn becomes that piece. Reaching the far rank makes it a queen.</p>
+  <h3>Capturing</h3>
+  <p>A captured card stays hidden until the capture is accepted: when your opponent moves on, or challenges and loses. Capturing never reveals your own piece.</p>
+  <h3>Challenging</h3>
+  <p>Before your move you may challenge the last move. A caught bluff loses that piece plus one more of your choosing. A wrong challenge costs you a piece of their choosing.</p>
+  <h3>Winning</h3>
+  <p>Capture the king and have it accepted, or take it as a penalty. You can resign or agree a draw at any time. Both starting setups are revealed at the end, and online games are checked against a commitment each player made before move one.</p>
+  <div class="row"><button id="help-close" class="primary">Got it</button></div>
+</dialog>
 <div id="pass" class="pass hidden"><div><h2 id="pass-title"></h2><p>Hand the screen over, then tap.</p><button id="pass-btn">I'm ready</button></div></div>
 <div id="over" class="pass hidden"><div><h2 id="over-title"></h2><p id="over-note"></p><p id="over-verify" class="verify"></p><div class="row"><button id="over-toggle">Show final position</button><button id="over-btn" class="primary">Play again</button></div></div></div>
 <script type="module" src="/src/main.js"></script>

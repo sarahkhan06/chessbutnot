@@ -135,6 +135,19 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowRight' && ui.viewPly !== null) togglePrevious();
 });
 
+// ---- how to play ----
+const help = $('help');
+function openHelp() { if (!help.open) help.showModal(); }
+$('help-btn').onclick = openHelp;
+$('help-close').onclick = () => help.close();
+help.onclick = (e) => { if (e.target === help) help.close(); }; // backdrop tap
+help.onclose = () => { try { localStorage.setItem('hic:rulesSeen', '1'); } catch { /* ignore */ } };
+function helpOnFirstVisit() {
+  let seen = true;
+  try { seen = !!localStorage.getItem('hic:rulesSeen'); } catch { /* ignore */ }
+  if (!seen) openHelp();
+}
+
 // ---- misc buttons ----
 const restart = () => {
   clearSelection(); ui.confirm = null;
@@ -219,3 +232,4 @@ if (code) {
   game = new Game({ onChange });
   draw();
 }
+helpOnFirstVisit();

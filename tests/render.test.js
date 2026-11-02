@@ -48,3 +48,13 @@ describe('resign, draw and verification UI', () => {
     render(b, ui(), () => {}); expect(document.getElementById('over-verify').textContent).toBe('Opponent’s game verified');
   });
 });
+
+describe('how to play sheet', () => {
+  beforeEach(mountPage);
+  it('is a dialog with the six rule sections and an opener in the title bar', () => {
+    const d = document.getElementById('help');
+    expect(d.tagName).toBe('DIALOG');
+    expect([...d.querySelectorAll('h3')].map((h) => h.textContent)).toEqual(['Setup', 'Moving', 'Pawns', 'Capturing', 'Challenging', 'Winning']);
+    expect(document.querySelector('.titlebar #help-btn')).not.toBeNull(); expect(document.getElementById('help-close')).not.toBeNull();
+  });
+});
