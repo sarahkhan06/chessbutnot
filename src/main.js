@@ -32,6 +32,7 @@ function showPass(title) {
   $('pass-title').textContent = title || `${name(game.pub.turn)} to move`;
   $('pass').classList.remove('hidden');
   ui.passing = true;
+  draw(); // redraw with every card face-down so nothing leaks behind the overlay
 }
 $('pass-btn').onclick = () => { $('pass').classList.add('hidden'); ui.passing = false; draw(); };
 
