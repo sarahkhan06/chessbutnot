@@ -3,6 +3,7 @@ import { pieceAt, startSquare } from './rules/state.js';
 import { FILES } from './rules/geometry.js';
 
 export const GLYPH = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+const PIECE = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
 export const name = (c) => (c === 'w' ? 'White' : 'Black');
 const other = (c) => (c === 'w' ? 'b' : 'w');
 const $ = (id) => document.getElementById(id);
@@ -75,6 +76,17 @@ export function render(game, ui, onClick) {
   const faceUpOf = (id) => (viewing ? entry.faceUp?.[id] ?? null : pub.pieces[id].faceUp);
   const hl = showingStart ? null : viewing ? entry : pub.lastMove;
 
+  // Screen-reader text for a square: never more than the viewer is entitled to see.
+  const describe = (id) => {
+    if (!id) return 'empty';
+    if (blind) return 'hidden piece';
+    const p = pub.pieces[id];
+    if (showingStart) { const t = setups[p.color]?.[id]; return `${name(p.color)} ${t ? PIECE[t] : 'piece'}`; }
+    if (p.color === v) return `your ${PIECE[game.priv[v][id]]}`;
+    const fu = faceUpOf(id);
+    return fu ? `opponent's ${PIECE[fu]} (exposed)` : "opponent's piece";
+  };
+
   const board = $('board');
   board.innerHTML = '';
   board.classList.toggle('review', viewing);
@@ -83,14 +95,17 @@ export function render(game, ui, onClick) {
       const rank = flip ? ri + 1 : 8 - ri;
       const file = flip ? 7 - fi : fi;
       const sqName = FILES[file] + rank;
-      const el = document.createElement('div');
+      const el = document.createElement('button');
+      el.type = 'button';
       el.className = 'sq' + ((file + rank) % 2 ? ' dk' : '');
       el.dataset.sq = sqName;
+      el.setAttribute('aria-pressed', String(!viewing && !blind && sqName === ui.selected));
       if (hl && (hl.from === sqName || hl.to === sqName)) el.classList.add('last');
       if (!viewing && !blind && sqName === ui.selected) el.classList.add('sel');
       if (!viewing && !blind && destMap.has(sqName)) el.classList.add(destMap.get(sqName) ? 'mv' : 'bluff');
       const id = at(sqName);
       if (id) el.classList.add('occ');
+      el.setAttribute('aria-label', `${sqName}, ${describe(id)}`);
       if (ri === 7) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = FILES[file]; el.appendChild(c); }
       if (fi === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank; el.appendChild(c); }
       if (!viewing && !blind && editable && id && pub.pieces[id].color === v) el.classList.add('edit');

@@ -67,8 +67,9 @@ h1{margin:0;font-size:.95rem;font-weight:600;letter-spacing:.18em;text-transform
 .stage{padding:2px 0}
 .board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--dark);
   box-shadow:0 0 0 1px #ffffff1a,0 30px 60px -24px #000d,0 10px 24px -12px #0009}
-.sq{position:relative;background:var(--light);cursor:pointer;user-select:none}
-.sq.dk{background:var(--dark)}
+.sq,.sq:hover,.sq:active{position:relative;appearance:none;border:0;padding:0;margin:0;border-radius:0;font:inherit;background:var(--light);cursor:pointer;user-select:none;transform:none;transition:none}
+.sq.dk,.sq.dk:hover{background:var(--dark)}
+.sq:focus-visible{outline:3px solid var(--sel);outline-offset:-3px;z-index:3}
 .coord{position:absolute;z-index:2;font-size:9px;font-weight:600;line-height:1;pointer-events:none;color:var(--coord-light);opacity:.75}
 .sq.dk .coord{color:var(--coord-dark)}
 .coord.file{right:3px;bottom:3px}

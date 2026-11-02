@@ -58,3 +58,20 @@ describe('how to play sheet', () => {
     expect(document.querySelector('.titlebar #help-btn')).not.toBeNull(); expect(document.getElementById('help-close')).not.toBeNull();
   });
 });
+
+describe('accessibility', () => {
+  beforeEach(mountPage);
+  it('squares are labelled buttons and the selection is announced', () => {
+    const g = hotseat(); const u = ui(); u.selected = 'b1'; render(g, u, () => {});
+    const b1 = document.querySelector('[data-sq="b1"]');
+    expect(b1.tagName).toBe('BUTTON'); expect(b1.getAttribute('aria-label')).toBe('b1, your knight'); expect(b1.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-sq="e8"]').getAttribute('aria-label')).toBe("e8, opponent's piece");
+    expect(document.querySelector('[data-sq="e4"]').getAttribute('aria-label')).toBe('e4, empty');
+    expect(document.getElementById('status').getAttribute('aria-live')).toBe('polite');
+  });
+  it('exposed and hidden cards are described', () => {
+    const g = hotseat(); g.move('e2', 'e4'); g.move('a7', 'a6'); g.move('e4', 'e6'); g.challenge(); // bluff caught: w12 exposed in the tray, not on the board
+    const u = ui(); u.passing = true; render(g, u, () => {});
+    expect(document.querySelector('[data-sq="e1"]').getAttribute('aria-label')).toBe('e1, hidden piece');
+  });
+});

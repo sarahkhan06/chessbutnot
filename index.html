@@ -12,12 +12,12 @@
 <div class="layout">
 <main>
   <header>
-    <div class="titlebar"><h1>Hidden Identity Chess</h1><span class="titlebar-right"><button id="help-btn" class="ghost" aria-label="How to play">How to play</button><span id="conn" class="conn hidden"></span></span></div>
-    <p id="status"></p>
+    <div class="titlebar"><h1>Hidden Identity Chess</h1><span class="titlebar-right"><button id="help-btn" class="ghost" aria-label="How to play">How to play</button><span id="conn" class="conn hidden" aria-live="polite"></span></span></div>
+    <p id="status" aria-live="polite"></p>
   </header>
   <div id="setup" class="setup hidden"><div class="pill" id="pill"></div><p id="setup-hint"></p><div class="controls"><button id="skip" title="Keep the normal chess layout and ready up in one tap">Standard setup</button><button id="done" class="primary">Done</button><button id="ready" class="primary">Ready up</button></div></div>
   <div class="captured" id="cap-top"></div>
-  <div class="stage"><div id="board" class="board"></div></div>
+  <div class="stage"><div id="board" class="board" role="group" aria-label="Chess board"></div></div>
   <div class="captured" id="cap-bottom"></div>
   <div id="replay" class="replay hidden">
     <button id="rw-prev" title="Show the position before the last move" aria-label="Show previous position">◀</button>
